@@ -57,3 +57,11 @@ cubes:
     min_gap: 0.015
     random_yaw: true
     max_tries: 2000
+
+hands:
+  sides: [left, right]
+  rgba: [0.92, 0.72, 0.60, 1.0]
+  palm_radius: 0.022
+  joint_radius: 0.009
+  tip_radius: 0.008
+  collide: false

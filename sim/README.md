@@ -9,6 +9,7 @@ MuJoCo digital twin of the workspace: SO-101 arm on a table, two bins, AprilTag 
 | `model/` | SO-101 MJCF from MuJoCo Menagerie (`robotstudio_so101`), Apache 2.0 |
 | `scene_builder.py` | Builds the scene from `config/scene.yaml` and writes the manifest |
 | `tags.py` | Generates the AprilTag textures (tag36h11) |
+| `hand.py` | Sim hand: scripted reaches into the workspace, or driven by the Quest hand stream |
 | `world.py` | `SimWorld`: runs physics in real time in a background thread, rendering, ground truth poses |
 | `generated/` | Output of the scene builder (gitignored) |
 
@@ -20,7 +21,7 @@ python -m sim.scene_builder --seed 3 --render cam.png
 mjpython -m sim.world
 ```
 
-`--view` opens the scene (paused physics viewer). `--render` saves one frame of the workspace camera. `sim.world` runs the live world with physics, the same thing the robot and camera APIs use.
+`--view` opens the scene in the MuJoCo viewer. `--render` saves one frame of the workspace camera. `sim.world` runs the live world with physics, the same thing the robot and camera APIs use.
 
 ## Scene
 
@@ -56,3 +57,12 @@ In tests on rendered frames all tags are detected, with position errors around 1
 
 - Use corner refinement (`CORNER_REFINE_APRILTAG` in OpenCV). Without it the error is around 1 to 2 cm.
 - Tilt estimates for the flat tags (anchor, bins) are noisy. Better to assume they lie flat on the table.
+
+## Hand
+
+Two hands (`left`, `right`) of 26 spheres each, in OpenXR joint order, the same joints Quest hand tracking gives. They are mocap bodies, so they move where they are told and don't collide by default (`hands.collide` in `scene.yaml`). They show up in the camera image, so perception sees realistic occlusion.
+
+The `sim.hand:SimHand` node has two sources:
+
+- `scripted`: the right hand rests on the human side of the table, reaches over one cube after another, holds, and pulls back (minimum jerk, timing in the node params). It publishes `hand` like the Quest would.
+- `bus`: listens to `hand` from the Quest app and moves the sim hand to match.

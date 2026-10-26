@@ -115,6 +115,16 @@ class SimWorld:
             R = self.data.cam_xmat[cam].reshape(3, 3) @ CV_FROM_MJ_CAMERA
         return self.base_from_mujoco() * Pose.from_rotation(pos, R)
 
+    def set_hand(self, side, joints_base):
+        hands = self.manifest.get("hands")
+        if not hands or side not in hands["sides"]:
+            return
+        T = self.base_from_mujoco().inverse()
+        with self.lock:
+            for i, joint in enumerate(hands["joints"]):
+                mocap = self.model.body_mocapid[self.model.body(f"hand_{side}_{joint}").id]
+                self.data.mocap_pos[mocap] = hands["park"] if joints_base is None else T * joints_base[i]
+
     def object_poses(self):
         names = [c["name"] for c in self.manifest["cubes"]] + [b["name"] for b in self.manifest["bins"]]
         return {n: self.body_pose_base(n) for n in names}

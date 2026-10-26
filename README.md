@@ -28,9 +28,11 @@ Run everything from the repo root and always use `python -m ...`, otherwise the 
 python -m sim.scene_builder --view
 mjpython -m hardware.demo
 python -m task.objects
+python launch.py dev
+python -m interfaces.echo
 ```
 
-The first command opens the generated scene in the MuJoCo viewer. The second runs a small motion demo through the robot API with the viewer open (on macOS the live viewer needs `mjpython`, which comes with mujoco). The third prints which cube goes to which bin and whether the robot or the human handles it.
+The first command opens the generated scene in the MuJoCo viewer. The second runs a small motion demo through the robot API with the viewer open (on macOS the live viewer needs `mjpython`, which comes with mujoco). The third prints which cube goes to which bin and whether the robot or the human handles it. `launch.py dev` starts the message bus, the sim and stub nodes (objects, arm state, a scripted hand reaching into the workspace); `interfaces.echo` in a second terminal shows the messages. Use `mjpython launch.py dev_viewer` to watch it, and `quest` to drive the sim hand from the Quest instead of the script.
 
 ## Repo layout
 
@@ -43,7 +45,7 @@ The first command opens the generated scene in the MuJoCo viewer. The second run
 | `controls/` | IK, trajectories, Cartesian commands |
 | `supervisor/` | Runtime safety monitor between task/teleop and controls |
 | `task/` | Object registry, task allocation, mode switching |
-| `interfaces/` | Message definitions shared between modules |
+| `interfaces/` | Frames, pose type, messages, message bus |
 | `quest_app/` | Unity app for the Meta Quest |
 
 More detail in `interfaces/README.md` (frames and message types), `sim/README.md` and `hardware/README.md`.
@@ -60,7 +62,7 @@ Code never changes between the two.
 
 ## Team rules
 
-1. Get devices only through `make_robot()` and `make_camera()` from `hardware`. Never import `sim` or `lerobot` in controls, perception or supervisor code.
+1. Modules talk only through the message bus (see `interfaces/README.md`). Get devices only through `make_robot()` and `make_camera()` from `hardware`. Never import `sim` or `lerobot` in controls, perception or supervisor code.
 2. Don't use `robot.world` or any sim ground truth inside the control loop. It does not exist on the real system. Ground truth is only for evaluation and debugging.
 3. Settings go in `config/`, not hardcoded in the code.
 4. Units: meters, radians in the sim internals; the robot API uses degrees for joints and 0 to 100 for the gripper, same as LeRobot.

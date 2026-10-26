@@ -15,6 +15,7 @@ DEFAULT_CONFIG = ROOT / "config" / "scene.yaml"
 ROBOT_CONFIG = ROOT / "config" / "robot.yaml"
 GENERATED = ROOT / "sim" / "generated"
 STICKER_HALF_THICKNESS = 0.0002
+HAND_PARK = [0.0, 0.0, -2.0]
 
 
 def load_config(path=DEFAULT_CONFIG):
@@ -70,8 +71,23 @@ class SceneBuilder:
         self._add_anchor()
         self._add_bins()
         self._add_cubes()
+        self._add_hands()
         self._add_home_key()
         return self.spec
+
+    def _add_hands(self):
+        h = self.cfg.get("hands")
+        if not h:
+            return
+        from interfaces.messages import HAND_JOINTS
+        collide = 1 if h.get("collide", False) else 0
+        self.manifest["hands"] = {"sides": h["sides"], "joints": HAND_JOINTS, "park": HAND_PARK}
+        for side in h["sides"]:
+            for joint in HAND_JOINTS:
+                radius = h["palm_radius"] if joint == "palm" else h["tip_radius"] if joint.endswith("tip") else h["joint_radius"]
+                body = self.world.add_body(name=f"hand_{side}_{joint}", pos=HAND_PARK, mocap=True)
+                body.add_geom(name=f"hand_{side}_{joint}", type=mujoco.mjtGeom.mjGEOM_SPHERE, size=[radius, 0, 0],
+                              rgba=h["rgba"], contype=collide, conaffinity=collide, group=1)
 
     def _add_home_key(self):
         home = [float(v) for v in self.robot_cfg["home_qpos"]]

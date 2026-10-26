@@ -1,0 +1,24 @@
+profiles:
+  dev:
+    sim: {viewer: false}
+    nodes:
+      - node: perception.node:ObjectPublisher
+      - node: hardware.state_node:ArmStateStub
+      - node: sim.hand:SimHand
+        params: {source: scripted, side: right}
+
+  dev_viewer:
+    sim: {viewer: true}
+    nodes:
+      - node: perception.node:ObjectPublisher
+      - node: hardware.state_node:ArmStateStub
+      - node: sim.hand:SimHand
+        params: {source: scripted, side: right}
+
+  quest:
+    sim: {viewer: true}
+    nodes:
+      - node: perception.node:ObjectPublisher
+      - node: hardware.state_node:ArmStateStub
+      - node: sim.hand:SimHand
+        params: {source: bus}
