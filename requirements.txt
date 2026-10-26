@@ -1,0 +1,4 @@
+mujoco>=3.2
+numpy
+pyyaml
+opencv-python>=4.7

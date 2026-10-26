@@ -1,0 +1,10 @@
+backend: sim
+serial_number_or_name: "Intel RealSense D435I"
+fps: 30
+width: 1920
+height: 1080
+color_mode: rgb
+use_rgb: true
+use_depth: false
+rotation: 0
+warmup_s: 1

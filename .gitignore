@@ -1,0 +1,60 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.env
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Sim / experiment outputs
+logs/
+recordings/
+*.mp4
+*.npz
+MUJOCO_LOG.TXT
+
+# Unity (quest_app)
+quest_app/[Ll]ibrary/
+quest_app/[Tt]emp/
+quest_app/[Oo]bj/
+quest_app/[Bb]uild/
+quest_app/[Bb]uilds/
+quest_app/[Ll]ogs/
+quest_app/[Uu]ser[Ss]ettings/
+quest_app/[Mm]emoryCaptures/
+quest_app/[Rr]ecordings/
+quest_app/*.csproj
+quest_app/*.sln
+quest_app/*.user
+quest_app/*.pidb
+quest_app/*.booproj
+quest_app/*.svd
+quest_app/*.pdb
+quest_app/*.mdb
+quest_app/*.opendb
+quest_app/*.VC.db
+quest_app/*.apk
+quest_app/*.aab
+quest_app/.vs/
+quest_app/.gradle/
+quest_app/sysinfo.txt
+quest_app/crashlytics-build.properties
+
+# Generated scenes
+sim/generated/

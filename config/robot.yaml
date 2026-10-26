@@ -1,0 +1,25 @@
+name: so101
+backend: sim
+id: so101_follower
+port: /dev/tty.usbmodem58760431541
+calibration_dir: config/calibration
+use_degrees: true
+max_relative_target: null
+disable_torque_on_disconnect: true
+
+max_payload: 0.20
+max_grasp_width: 0.06
+reach: [0.10, 0.32]
+home_qpos: [0.0, -1.49, 0.0, 0.0, 0.0, 0.0]
+
+sim:
+  world:
+    realtime: true
+    viewer: false
+  joint_map:
+    shoulder_pan: {sign: 1, offset_deg: 0.0}
+    shoulder_lift: {sign: 1, offset_deg: 0.0}
+    elbow_flex: {sign: 1, offset_deg: 0.0}
+    wrist_flex: {sign: 1, offset_deg: 0.0}
+    wrist_roll: {sign: 1, offset_deg: 0.0, full_turn: true}
+    gripper: {sign: 1, mode: range}
