@@ -7,7 +7,7 @@ import mujoco
 import numpy as np
 import yaml
 
-from sim.tags import black_edge, tag_face_image
+from sim.tags import black_edge, qr_face_image, tag_face_image
 
 ROOT = Path(__file__).resolve().parents[1]
 MODEL_XML = ROOT / "sim" / "model" / "so101.xml"
@@ -16,6 +16,7 @@ ROBOT_CONFIG = ROOT / "config" / "robot.yaml"
 GENERATED = ROOT / "sim" / "generated"
 STICKER_HALF_THICKNESS = 0.0002
 HAND_PARK = [0.0, 0.0, -2.0]
+TEXTURE_UP_DEG = 90.0
 
 
 def load_config(path=DEFAULT_CONFIG):
@@ -68,7 +69,7 @@ class SceneBuilder:
     def build(self):
         self._add_environment()
         self._add_camera()
-        self._add_anchor()
+        self._add_baseplate()
         self._add_bins()
         self._add_cubes()
         self._add_hands()
@@ -102,12 +103,7 @@ class SceneBuilder:
 
     def _add_tag_material(self, name, tag_id, margin_rgba=(1, 1, 1, 1), face_fraction=1.0):
         margin = tuple(int(255 * c) for c in margin_rgba[:3])
-        img = tag_face_image(self.family, tag_id, face_fraction, margin)
-        tex = self.spec.add_texture(name=f"{name}_tex", type=mujoco.mjtTexture.mjTEXTURE_2D,
-                                    width=img.shape[1], height=img.shape[0], nchannel=3)
-        tex.data = img.tobytes()
-        self.spec.add_material(name=f"{name}_mat", textures=["", f"{name}_tex"])
-        return f"{name}_mat"
+        return self._add_face_material(name, tag_face_image(self.family, tag_id, face_fraction, margin))
 
     def _add_sticker(self, body, name, material, size, z):
         body.add_geom(name=f"{name}_tag", type=mujoco.mjtGeom.mjGEOM_BOX,
@@ -161,20 +157,39 @@ class SceneBuilder:
                                                 "offset": offset.tolist(), "range": d["range"],
                                                 "intrinsics": camera_intrinsics(d["fovy"], dw, dh)}
 
-    def _add_anchor(self):
-        a = self.cfg["tags"]["anchor"]
-        body = self.world.add_body(name="anchor", pos=[a["pos"][0], a["pos"][1], 0])
-        mat = self._add_tag_material("anchor", a["id"])
-        self._add_sticker(body, "anchor", mat, a["size"], STICKER_HALF_THICKNESS)
-        self.footprints.append((np.array(a["pos"]), a["size"] * 0.75))
-        self.manifest["anchor"] = {"tag_id": a["id"], "pos": [a["pos"][0], a["pos"][1], 0.0],
-                                   "tag_size": black_edge(self.family, a["size"])}
+    def _add_face_material(self, name, img):
+        tex = self.spec.add_texture(name=f"{name}_tex", type=mujoco.mjtTexture.mjTEXTURE_2D,
+                                    width=img.shape[1], height=img.shape[0], nchannel=3)
+        tex.data = img.tobytes()
+        self.spec.add_material(name=f"{name}_mat", textures=["", f"{name}_tex"])
+        return f"{name}_mat"
+
+    def _add_baseplate(self):
+        bp = self.cfg["baseplate"]
+        with open(ROOT / bp["markers"]) as f:
+            markers = yaml.safe_load(f)
+        plate = markers["plate"]
+        self.spec.add_material(name="baseplate_mat", rgba=bp["rgba"])
+        self.spec.add_mesh(name="baseplate", file=str(ROOT / plate["mesh"]), scale=[0.001] * 3)
+        self.world.add_geom(name="baseplate", type=mujoco.mjtGeom.mjGEOM_MESH, meshname="baseplate",
+                            material="baseplate_mat", contype=0, conaffinity=0, group=1)
+        self.manifest["baseplate"] = {"thickness": plate["thickness"], "bounds": plate["bounds"], "markers": []}
+        for mk in markers["markers"]:
+            name = f"marker_{mk['name']}"
+            pos = [float(v) for v in mk["pos"]]
+            body = self.world.add_body(name=name, pos=pos, quat=yaw_quat(math.radians(mk["yaw_deg"] - TEXTURE_UP_DEG)))
+            mat = self._add_face_material(name, qr_face_image(mk["payload"], markers["qr"]["border_modules"]))
+            self._add_sticker(body, name, mat, mk["sticker_size"], STICKER_HALF_THICKNESS)
+            self.footprints.append((np.array(pos[:2]), mk["sticker_size"] * 0.75))
+            self.manifest["baseplate"]["markers"].append({
+                "name": mk["name"], "body": name, "payload": mk["payload"], "use": mk["use"], "pos": pos,
+                "yaw_deg": mk["yaw_deg"], "code_size": mk["code_size"], "corners": mk["corners"],
+            })
 
     def _add_bins(self):
         b = self.cfg["bins"]
         ix, iy = b["inner_size"]
         h, w = b["height"], b["wall"]
-        tab = b["tag_size"] * 1.2
         self.manifest["bins"] = []
         for item in b["items"]:
             yaw = math.radians(item.get("yaw_deg", 0))
@@ -191,21 +206,15 @@ class SceneBuilder:
             for part, size, pos in parts:
                 body.add_geom(name=f"{item['name']}_{part}", type=mujoco.mjtGeom.mjGEOM_BOX,
                               size=size, pos=pos, rgba=rgba)
-            tab_x = ox + tab / 2
-            tab_body = body.add_body(name=f"{item['name']}_tab", pos=[tab_x, 0, 0])
-            tab_body.add_geom(name=f"{item['name']}_tab_plate", type=mujoco.mjtGeom.mjGEOM_BOX,
-                              size=[tab / 2, tab / 2, 0.001], pos=[0, 0, 0.001], rgba=rgba)
             mat = self._add_tag_material(item["name"], item["tag_id"])
-            self._add_sticker(tab_body, item["name"], mat, b["tag_size"], 0.002 + STICKER_HALF_THICKNESS)
+            self._add_sticker(body, item["name"], mat, b["tag_size"], w + STICKER_HALF_THICKNESS)
             center = np.array(item["pos"], float)
             self.footprints.append((center, math.hypot(ox, oy)))
-            tab_world = center + tab_x * np.array([math.cos(yaw), math.sin(yaw)])
-            self.footprints.append((tab_world, tab * 0.75))
             self.manifest["bins"].append({
                 "name": item["name"], "color": item["color"], "tag_id": item["tag_id"],
                 "pos": [*item["pos"], 0.0], "yaw": yaw, "inner_size": [ix, iy], "height": h,
                 "tag_size": black_edge(self.family, b["tag_size"]),
-                "tag_offset": [tab_x, 0.0, 0.002 + 2 * STICKER_HALF_THICKNESS],
+                "tag_offset": [0.0, 0.0, w + 2 * STICKER_HALF_THICKNESS],
             })
 
     def _sample_position(self, radius, placed, total):

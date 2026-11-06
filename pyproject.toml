@@ -15,11 +15,13 @@ dependencies = [
     "pyyaml",
     "opencv-python-headless>=4.9,<4.14",
     "pyzmq",
+    "qrcode",
 ]
 
 [project.optional-dependencies]
 real = ["lerobot[feetech,intelrealsense]"]
 dev = ["pytest"]
+baseplate = ["trimesh", "manifold3d", "ezdxf", "reportlab", "shapely", "matplotlib"]
 
 [project.scripts]
 cobot-launch = "launch:main"

@@ -9,7 +9,7 @@ class GroundTruthTracker:
     def __init__(self, world):
         self.world = world
         m = world.manifest
-        self.registry = {m["anchor"]["tag_id"]: ("anchor", "anchor")}
+        self.registry = {}
         self.registry.update({b["tag_id"]: (b["name"], "bin") for b in m["bins"]})
         self.registry.update({c["tag_id"]: (c["name"], "cube") for c in m["cubes"]})
 
