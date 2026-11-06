@@ -28,10 +28,10 @@ camera:
 tags:
   family: tag36h11
   face_fraction: 0.8
-  anchor:
-    id: 0
-    pos: [0.40, 0.28]
-    size: 0.06
+
+baseplate:
+  markers: config/world_markers.yaml
+  rgba: [0.45, 0.50, 0.56, 1.0]
 
 bins:
   inner_size: [0.11, 0.11]
@@ -52,7 +52,7 @@ cubes:
     standard: {ratio: 0.75, size: 0.03, mass: 0.03}
     heavy: {ratio: 0.25, size: 0.03, mass: 1.5}
   spawn:
-    radius: [0.14, 0.30]
+    radius: [0.17, 0.30]
     angle_deg: [-65, 65]
     min_gap: 0.015
     random_yaw: true

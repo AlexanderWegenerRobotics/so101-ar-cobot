@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+import qrcode
 
 FAMILIES = {
     "tag36h11": cv2.aruco.DICT_APRILTAG_36h11,
@@ -26,3 +27,13 @@ def black_edge(family, printed_size):
     dictionary = cv2.aruco.getPredefinedDictionary(FAMILIES[family])
     cells_black = dictionary.markerSize + 2
     return printed_size * cells_black / (cells_black + 2)
+
+
+def qr_face_image(payload, border_modules=2, module_px=16):
+    qr = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_M, border=border_modules)
+    qr.add_data(payload)
+    qr.make(fit=True)
+    cells = np.array(qr.get_matrix(), dtype=bool)
+    img = np.where(cells, 0, 255).astype(np.uint8)
+    img = np.kron(img, np.ones((module_px, module_px), dtype=np.uint8))
+    return cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
