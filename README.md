@@ -6,33 +6,31 @@ Course project for EC545 Cyber-Physical Systems, Boston University, Fall 2026.
 
 ## Setup
 
-Python 3.12 is recommended (LeRobot needs it for the real hardware).
+Use a fresh environment for this project (the packages have short names like `sim` and `task` that could clash with other installs). Python 3.11 works for the sim; the real arm and camera need 3.12 because of LeRobot.
 
 ```
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+conda create -n cobot python=3.12
+conda activate cobot
+pip install -e .
 ```
 
-Only needed when working with the real arm or camera:
+`-e` installs the repo in editable mode: code changes apply right away, and imports between folders work from anywhere. For the real hardware add the extras:
 
 ```
-pip install "lerobot[feetech,intelrealsense]"
+pip install -e ".[real]"
 ```
 
 ## Quickstart
-
-Run everything from the repo root and always use `python -m ...`, otherwise the imports between folders fail.
 
 ```
 python -m sim.scene_builder --view
 mjpython -m hardware.demo
 python -m task.objects
-python launch.py dev
-python -m interfaces.echo
+cobot-launch dev
+cobot-echo
 ```
 
-The first command opens the generated scene in the MuJoCo viewer. The second runs a small motion demo through the robot API with the viewer open (on macOS the live viewer needs `mjpython`, which comes with mujoco). The third prints which cube goes to which bin and whether the robot or the human handles it. `launch.py dev` starts the message bus, the sim and stub nodes (objects, arm state, a scripted hand reaching into the workspace); `interfaces.echo` in a second terminal shows the messages. Use `mjpython launch.py dev_viewer` to watch it, and `quest` to drive the sim hand from the Quest instead of the script.
+The first command opens the generated scene in the MuJoCo viewer. The second runs a small motion demo through the robot API with the viewer open (on macOS the live viewer needs `mjpython`, which comes with mujoco). The third prints which cube goes to which bin and whether the robot or the human handles it. `cobot-launch dev` starts the message bus, the sim and stub nodes (objects, arm state, a scripted hand reaching into the workspace); `cobot-echo` in a second terminal shows the messages (`cobot-echo hand objects` for only those topics). Use `mjpython launch.py dev_viewer` to watch it in the viewer, and `cobot-launch quest` to drive the sim hand from the Quest instead of the script.
 
 ## Repo layout
 

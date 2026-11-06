@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "so101-ar-cobot"
+version = "0.1.0"
+description = "SO-101 arm + Meta Quest AR for safe human-robot shared workspaces, with a runtime safety supervisor and MuJoCo digital twin."
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.10"
+dependencies = [
+    "mujoco>=3.2",
+    "numpy",
+    "pyyaml",
+    "opencv-python-headless>=4.9,<4.14",
+    "pyzmq",
+]
+
+[project.optional-dependencies]
+real = ["lerobot[feetech,intelrealsense]"]
+dev = ["pytest"]
+
+[project.scripts]
+cobot-launch = "launch:main"
+cobot-echo = "interfaces.echo:main"
+
+[tool.setuptools]
+py-modules = ["launch"]
+
+[tool.setuptools.packages.find]
+include = ["hardware*", "interfaces*", "perception*", "sim*", "task*", "controls*", "supervisor*"]

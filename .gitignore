@@ -61,3 +61,6 @@ quest_app/**/crashlytics-build.properties
 
 # Generated scenes
 sim/generated/
+
+# Render outputs in the repo root
+/*.png

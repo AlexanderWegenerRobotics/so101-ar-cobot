@@ -2,7 +2,7 @@
 
 Device interface for the SO-101 arm and the RealSense D435i. Every device has a real backend (LeRobot) and a sim backend with the same API. Which one you get is decided by `backend` in the config, nothing else.
 
-Mirrors LeRobot v0.6.2 (`SO101Follower`, `RealSenseCamera`).
+Mirrors LeRobot v0.6.2 and v0.7.0 (identical robot, camera and motor bus APIs) (`SO101Follower`, `RealSenseCamera`).
 
 ## Robot
 

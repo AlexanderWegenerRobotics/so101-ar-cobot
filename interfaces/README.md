@@ -61,7 +61,7 @@ sub = Subscriber([Topic.OBJECTS, Topic.SAFETY])
 safety = sub.latest(Topic.SAFETY, max_age=0.2)
 ```
 
-Debug: `python -m interfaces.echo` prints everything on the bus, `python -m interfaces.echo objects hand` only those topics.
+Debug: `cobot-echo` prints everything on the bus, `cobot-echo objects hand` only those topics.
 
 ## Data flow
 
@@ -135,9 +135,9 @@ These are the rules the verification part can state formally.
 
 | You work on | Run | You get |
 |---|---|---|
-| Unity / Quest | `python launch.py dev` | objects, arm joints, a scripted hand |
-| Supervisor | `python launch.py dev` | hand and arm state to compute distances |
-| Controls | `python launch.py dev` plus your node | objects to target. Publish `arm/command` yourself from a test script while there is no supervisor |
-| Task | `python launch.py dev` | objects; fake `arm/status` from a test script |
+| Unity / Quest | `cobot-launch dev` | objects, arm joints, a scripted hand |
+| Supervisor | `cobot-launch dev` | hand and arm state to compute distances |
+| Controls | `cobot-launch dev` plus your node | objects to target. Publish `arm/command` yourself from a test script while there is no supervisor |
+| Task | `cobot-launch dev` | objects; fake `arm/status` from a test script |
 
 The `hardware.state_node:ArmStateStub` publishes joint angles only. It is a stand-in until controls publishes `arm/state` itself, so remove it from the profile once controls runs, or both will publish.

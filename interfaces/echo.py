@@ -13,13 +13,16 @@ def main():
     topics = args.topics or [v for k, v in vars(Topic).items() if not k.startswith("_")]
     sub = Subscriber(topics)
     print(f"listening on {topics}")
-    while True:
-        r = sub.recv(timeout_ms=1000)
-        if r is None:
-            continue
-        topic, msg = r
-        text = json.dumps(to_jsonable(msg))
-        print(f"[{topic}] {type(msg).__name__} {text if args.full else text[:160]}")
+    try:
+        while True:
+            r = sub.recv(timeout_ms=1000)
+            if r is None:
+                continue
+            topic, msg = r
+            text = json.dumps(to_jsonable(msg))
+            print(f"[{topic}] {type(msg).__name__} {text if args.full else text[:160]}")
+    except KeyboardInterrupt:
+        pass
 
 
 if __name__ == "__main__":
