@@ -64,4 +64,4 @@ hands:
   palm_radius: 0.022
   joint_radius: 0.009
   tip_radius: 0.008
-  collide: false
+  collide: true

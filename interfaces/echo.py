@@ -2,7 +2,7 @@ import argparse
 import json
 
 from interfaces.bus import Subscriber
-from interfaces.messages import Topic, to_jsonable
+from interfaces.messages import GROUND_TRUTH_PREFIX, Topic, to_jsonable
 
 
 def main():
@@ -10,8 +10,9 @@ def main():
     parser.add_argument("topics", nargs="*")
     parser.add_argument("--full", action="store_true")
     args = parser.parse_args()
-    topics = args.topics or [v for k, v in vars(Topic).items() if not k.startswith("_")]
-    sub = Subscriber(topics)
+    topics = args.topics or [v for k, v in vars(Topic).items()
+                             if not k.startswith("_") and not v.startswith(GROUND_TRUTH_PREFIX)]
+    sub = Subscriber(topics, allow_ground_truth=True)
     print(f"listening on {topics}")
     try:
         while True:
