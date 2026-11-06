@@ -1,1 +1,6 @@
+# What feeds the `objects` topic, i.e. what the AR layer, task and supervisor see.
+#   ground_truth: object poses straight from the MuJoCo sim. Use this while setting up AR,
+#                 so any misplacement is calibration or rendering, never perception.
+#   apriltag:     AprilTag detection on the camera image (sim render or real RealSense).
+# The VR world itself is always drawn from sim ground truth (sim/scene), independent of this.
 source: ground_truth

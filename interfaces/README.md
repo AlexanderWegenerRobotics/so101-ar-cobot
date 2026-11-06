@@ -88,6 +88,8 @@ controls ──arm/state, arm/plan──▶ everyone        task ──task/stat
 | `task/state` | `TaskState` | task → Unity | 5 Hz and on change |
 | `operator/command` | `OperatorCommand` | Quest app → task | on event |
 | `operator/teleop` | `TeleopTarget` | Quest app → task | 30 Hz while teleop |
+| `sim/scene_info` | `SceneInfo` | sim → Quest WorldRenderer only | 1 Hz |
+| `sim/scene` | `ScenePoses` | sim → Quest WorldRenderer only | 60 Hz |
 
 ## Messages
 
@@ -120,6 +122,37 @@ controls ──arm/state, arm/plan──▶ everyone        task ──task/stat
 **`OperatorCommand`**: `kind` = `set_mode` (uses `mode`), `select_object` (pointing gesture: `tag_id`, optional `bin_tag_id`), `cancel`.
 
 **`TeleopTarget`**: `target` (`ToolTarget`), `gripper`, `active`. The task node turns it into `stream` goals while in teleop mode.
+
+## Ground truth topics (sim only)
+
+`sim/*` is the simulated reality. In VR mode the Quest draws the virtual world from it in place of passthrough. Nothing else may use it: algorithms and the AR layer only see what they would also see on real hardware (`objects`, `arm/state`, ...). `Subscriber` raises `GroundTruthAccessError` for `sim/*` topics unless `allow_ground_truth=True`, which only `cobot-echo` and test scripts pass.
+
+Whether `objects` itself comes from ground truth or from AprilTag detection is set in `config/perception.yaml`. Start with `ground_truth` while setting up AR, so a misplaced overlay is never a perception problem. The renderer and the AR layer don't care which one it is.
+
+**`SceneInfo`**: `version` (changes when the scene changes, e.g. a new seed), `asset_version` (hash of the meshes, must match `Assets/Resources/SimScene/asset_version.txt` in the Quest build), `frame` (`base`), `textures` (name → base64 PNG), `bodies`:
+
+```
+{"name": "cube_10", "kind": "cube", "dynamic": true,
+ "pose": [x, y, z, qw, qx, qy, qz],            only for static bodies
+ "geoms": [{"name": ..., "type": "box|sphere|capsule|cylinder|ellipsoid|mesh",
+            "size": [...], "pos": [...], "quat": [...], "rgba": [...],
+            "mesh": "upper_arm_so101_v1",      only for type mesh
+            "texture": "cube_10_tex"}]}        only for textured geoms
+```
+
+`kind` is `world` (table, plate), `arm`, `cube`, `bin`, `marker`, `hand_left`, `hand_right`. Geom `pos`/`quat` are relative to the body, `size` uses MuJoCo conventions (half sizes for box, radius and half length for cylinder and capsule along the geom z axis).
+
+**`ScenePoses`**: `version` (same as `SceneInfo.version`, rebuild when it changes), `names`, `poses` (one `[x, y, z, qw, qx, qy, qz]` per name, base frame), `sim_time`. Only dynamic bodies are listed.
+
+**Assets**: `python -m sim.scene_export` writes the meshes as OBJ (decimated to about 4000 faces each) into `quest_app/QuestTeleop/Assets/Resources/SimScene/Meshes/`. Vertices are in the geom frame with base axes. Rerun it when the model changes and rebuild the Quest app.
+
+**Conversion to Unity** (the one place it happens, in the WorldRenderer):
+
+- Position: `unity = (-y, z, x)`
+- Quaternion (w, x, y, z) → Unity `Quaternion(y, -z, -x, w)`
+- Box size (hx, hy, hz) → `localScale = (2hy, 2hz, 2hx)` on a Unity cube. Cylinder and capsule axis is z in MuJoCo and y in Unity, so `localScale = (2r, h, 2r)` with h the half length.
+- Meshes: Unity's OBJ importer mirrors x, so the mesh child gets the fixed `localRotation = Quaternion(-0.5, 0.5, 0.5, 0.5)`. If the arm looks mirrored in the headset, this is the first thing to check.
+- Textures sit on the geom +z face (Unity +y), image up = geom +y, image right = geom +x.
 
 ## Safety rules
 

@@ -22,3 +22,13 @@ profiles:
       - node: hardware.state_node:ArmStateStub
       - node: sim.hand:SimHand
         params: {source: bus}
+
+  vr:
+    sim: {viewer: true}
+    nodes:
+      - node: perception.node:ObjectPublisher
+      - node: hardware.state_node:ArmStateStub
+      - node: sim.hand:SimHand
+        params: {source: bus}
+      - node: sim.scene_stream:SceneStreamer
+        params: {rate_hz: 60}

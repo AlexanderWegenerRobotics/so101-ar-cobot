@@ -31,6 +31,11 @@ class Topic:
     TASK_STATE = "task/state"
     OPERATOR_COMMAND = "operator/command"
     OPERATOR_TELEOP = "operator/teleop"
+    SIM_SCENE_INFO = "sim/scene_info"
+    SIM_SCENE = "sim/scene"
+
+
+GROUND_TRUTH_PREFIX = "sim/"
 
 
 def now():
@@ -144,9 +149,29 @@ class TeleopTarget:
     stamp: float = field(default_factory=now)
 
 
+@dataclass
+class SceneInfo:
+    version: str
+    asset_version: str
+    bodies: list
+    textures: dict = field(default_factory=dict)
+    frame: str = "base"
+    stamp: float = field(default_factory=now)
+
+
+@dataclass
+class ScenePoses:
+    version: str
+    names: list
+    poses: list
+    sim_time: float = 0.0
+    stamp: float = field(default_factory=now)
+
+
 MESSAGE_TYPES = {cls.__name__: cls for cls in [
     ToolTarget, ArmGoal, GoalStatus, ArmState, ArmPlan, SafetyState, HandState,
     ObjectArray, ObjectTask, TaskState, OperatorCommand, TeleopTarget, ObjectState, Pose,
+    SceneInfo, ScenePoses,
 ]}
 
 

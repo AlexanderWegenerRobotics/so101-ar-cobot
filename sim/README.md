@@ -10,6 +10,8 @@ MuJoCo digital twin of the workspace: SO-101 arm on a table, two bins, AprilTag 
 | `scene_builder.py` | Builds the scene from `config/scene.yaml` and writes the manifest |
 | `tags.py` | Generates the AprilTag (tag36h11) and QR code textures |
 | `hand.py` | Sim hand: scripted reaches into the workspace, or driven by the Quest hand stream |
+| `scene_export.py` | Scene description for the Quest WorldRenderer, exports the meshes into the Unity project |
+| `scene_stream.py` | `SceneStreamer` node: publishes `sim/scene_info` and `sim/scene` |
 | `world.py` | `SimWorld`: runs physics in real time in a background thread, rendering, ground truth poses |
 | `generated/` | Output of the scene builder (gitignored) |
 
@@ -75,3 +77,17 @@ The `sim.hand:SimHand` node has two sources:
 - Use only the three finder pattern corners of each code. OpenCV guesses the fourth corner, it is off by 2 to 4 px.
 - `cornerSubPix` with a small window (2 x 2). A 5 x 5 window pulls the corners off on the 4 px modules, the error goes up to about 1 cm.
 - The front code W3 sits 22 mm in front of the base because the shoulder motor housing hides the strip right in front of the base from the camera.
+
+## VR mode
+
+The Quest can show the sim instead of passthrough, so the same calibration, overlay and input code runs against the sim and later against the real setup. MuJoCo is the only physics: your tracked hand goes to the sim hand (`hand` topic), the collision spheres push the cubes, and the result comes back two ways:
+
+- `sim/scene` (ground truth, 60 Hz): draws the virtual world. Only the WorldRenderer reads it.
+- `objects` (30 Hz): what the AR layer, task and supervisor see. Ground truth or AprilTag detection, set in `config/perception.yaml`.
+
+```
+python -m sim.scene_export        once, and after model changes, then rebuild the Quest app
+cobot-launch vr                   sim + objects + sim hand from the Quest + scene stream
+```
+
+The hand spheres collide (`hands.collide` in `scene.yaml`), so pushing cubes works. Grasping a cube with your own hand through contacts alone is not stable in MuJoCo; if needed, that would be a weld on pinch on the sim side.

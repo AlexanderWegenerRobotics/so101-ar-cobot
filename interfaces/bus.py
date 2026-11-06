@@ -6,7 +6,7 @@ from pathlib import Path
 import yaml
 import zmq
 
-from interfaces.messages import decode, encode
+from interfaces.messages import GROUND_TRUTH_PREFIX, decode, encode
 
 ROOT = Path(__file__).resolve().parents[1]
 BUS_CONFIG = ROOT / "config" / "bus.yaml"
@@ -56,10 +56,20 @@ class Publisher:
         self.sock.close(linger=0)
 
 
+class GroundTruthAccessError(PermissionError):
+    pass
+
+
 class Subscriber:
-    def __init__(self, topics, cfg=None):
+    def __init__(self, topics, cfg=None, allow_ground_truth=False):
         cfg = cfg or load_bus_config()
         self.topics = [topics] if isinstance(topics, str) else list(topics)
+        hidden = [t for t in self.topics if t.startswith(GROUND_TRUTH_PREFIX)]
+        if hidden and not allow_ground_truth:
+            raise GroundTruthAccessError(
+                f"{hidden} is sim ground truth for rendering the virtual world only. "
+                "Algorithms must use the observed topics (objects, arm/state, ...). "
+                "Pass allow_ground_truth=True only in debug tools.")
         self.sock = zmq.Context.instance().socket(zmq.SUB)
         self.sock.connect(f"tcp://{cfg['host']}:{cfg['sub_port']}")
         for t in self.topics:
