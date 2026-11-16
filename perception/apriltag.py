@@ -55,8 +55,8 @@ def sim_check():
         tag_world = data.xpos[body] + data.xmat[body].reshape(3, 3) @ tag["tag_offset"]
         true_pos = R_cam.T @ (tag_world - data.cam_xpos[cam])
         pose = tag_pose_camera(detected[tag["tag_id"]], tag["tag_size"], K)
-        error_mm = np.linalg.norm(pose.pos - true_pos) * 1000
-        print(f"tag {tag['tag_id']:3d}  position error {error_mm:.2f} mm")
+        error_mm = (pose.pos - true_pos) * 1000
+        print(f"tag {tag['tag_id']:3d}  error x {error_mm[0]:6.2f}  y {error_mm[1]:6.2f}  z {error_mm[2]:6.2f} mm")
     print(f"{len(detected)} of {len(tags)} tags detected")
 
 
