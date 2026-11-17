@@ -33,6 +33,10 @@ def tag_pose_camera(corners, tag_size, K, dist=None):
     return Pose.from_rotation(tvec.ravel(), R)
 
 
+def camera_matrix(intrinsics):
+    return np.array([[intrinsics["fx"], 0, intrinsics["cx"]], [0, intrinsics["fy"], intrinsics["cy"]], [0, 0, 1]])
+    
+
 def sim_check():
     from sim.scene_builder import build, home_data, render_camera
 
