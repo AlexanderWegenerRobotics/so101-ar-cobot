@@ -1,3 +1,8 @@
+import time
+
+from hardware import camera_intrinsics
+from perception.apriltag import camera_matrix
+
 import argparse
 from pathlib import Path
 
@@ -46,6 +51,20 @@ def camera_pose(gray, K, dist=None, markers=None, min_markers=3):
     R_wc = R_cw.T
     pos = (-R_wc @ tvec).ravel()
     return Pose.from_rotation(pos, R_wc), sorted(found)
+
+
+def calibrate_camera(camera, attempts=30, delay=0.1):
+    intrinsics = camera_intrinsics(camera)
+    K = camera_matrix(intrinsics)
+    dist = np.array(intrinsics["coeffs"])
+    markers = load_markers()
+    for _ in range(attempts):
+        gray = cv2.cvtColor(camera.read_latest(), cv2.COLOR_RGB2GRAY)
+        pose, _ = camera_pose(gray, K, dist, markers)
+        if pose is not None:
+            return pose
+        time.sleep(delay)
+    raise RuntimeError("camera calibration failed, the three plate QR codes are not all visible")
 
 
 def sim_check():
