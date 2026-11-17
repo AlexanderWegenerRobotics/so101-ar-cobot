@@ -7,7 +7,7 @@ import numpy as np
 
 from hardware import camera_intrinsics
 from interfaces import ObjectState, Pose, pose_error
-from perception.apriltag import detect_tags, make_detector, tag_pose_camera
+from perception.apriltag import camera_matrix, detect_tags, make_detector, tag_pose_camera
 
 
 @dataclass
