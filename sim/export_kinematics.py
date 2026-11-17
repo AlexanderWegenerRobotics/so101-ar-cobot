@@ -25,7 +25,8 @@ def export_kinematics(model, path=KINEMATICS_YAML):
         joint = model.joint(name)
         body = model.jnt_bodyid[joint.id]
         joints.append({"name": name, "pos": rounded(model.body_pos[body]),
-                       "quat": rounded(model.body_quat[body]), "axis": rounded(model.jnt_axis[joint.id])})
+                       "quat": rounded(model.body_quat[body]), "axis": rounded(model.jnt_axis[joint.id]),
+                       "limits": rounded(model.jnt_range[joint.id])})
     site = model.site(TOOL_SITE)
     assert model.site_bodyid[site.id] == model.jnt_bodyid[model.joint(ARM_JOINTS[-1]).id], \
         "tool site must sit on the last arm joint's body"
