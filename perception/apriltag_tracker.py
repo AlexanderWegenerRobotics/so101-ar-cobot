@@ -82,11 +82,12 @@ class AprilTagTracker:
 def sim_check():
     from hardware import get_sim_world, make_camera
     from perception.ground_truth import GroundTruthTracker
+    from perception.qr_extrinsics import calibrate_camera
 
     world = get_sim_world()
     manifest = world.manifest
     with make_camera("sim") as camera:
-        tracker = AprilTagTracker(camera, world.camera_pose_base(), build_registry(manifest), manifest["tag_family"])
+        tracker = AprilTagTracker(camera, calibrate_camera(camera), build_registry(manifest), manifest["tag_family"])
         truth = GroundTruthTracker(world).get_objects()
         detected = tracker.get_objects()
     for tag_id, obj in detected.items():
