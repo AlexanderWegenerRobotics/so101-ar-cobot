@@ -39,3 +39,8 @@ profiles:
     nodes:
       - node: controls.stubs:SafetyStub
       - node: controls.node:ArmControllerNode
+
+  measure:
+    sim: {viewer: false}
+    nodes:
+      - node: controls.node:ArmControllerNode
