@@ -32,3 +32,10 @@ profiles:
         params: {source: bus}
       - node: sim.scene_stream:SceneStreamer
         params: {rate_hz: 60}
+
+
+  controls:
+    sim: {viewer: true}
+    nodes:
+      - node: controls.stubs:SafetyStub
+      - node: controls.node:ArmControllerNode
