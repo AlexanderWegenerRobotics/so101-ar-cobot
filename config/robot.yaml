@@ -30,3 +30,4 @@ controller:
   max_angular_speed: 1.0   # rad/s, tool pitch and roll
   watchdog_timeout: 0.2    # s, safety messages and stream commands
   goal_tolerance: 1.0      # deg, how close counts as reached
+  goal_timeout: 20.0       # s of active motion before a goal fails

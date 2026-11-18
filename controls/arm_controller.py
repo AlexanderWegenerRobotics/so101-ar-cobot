@@ -22,6 +22,7 @@ class ArmController:
         self.goal = None
         self.path = None
         self.path_time = 0.0
+        self.goal_time = 0.0
         self.joint_target = None
         self.stream_target = None
         self.stream_time = -np.inf
@@ -76,7 +77,7 @@ class ArmController:
         if self.goal is not None:
             messages.append(status(self.goal, "preempted"))
         self.goal, self.path, self.joint_target = goal, path, joint_target
-        self.path_time, self.last_q, self.hold = 0.0, q, None
+        self.path_time, self.goal_time, self.last_q, self.hold = 0.0, 0.0, q, None
         messages.append(status(goal, "accepted"))
         return messages
 
@@ -121,6 +122,11 @@ class ArmController:
         if goal.kind == "stream" and now - self.stream_time > self.cfg["watchdog_timeout"]:
             return self._hold_action(joints), "holding", []
 
+        if goal.kind != "stream":
+            self.goal_time += dt * scale
+            if self.goal_time > self.cfg["goal_timeout"]:
+                return self._fail(goal, "timeout", joints)
+
         if goal.kind == "pose":
             self.path_time += dt * scale
             desired_q = self.kin.inverse(self.path.at(self.path_time), self.last_q)
@@ -131,9 +137,7 @@ class ArmController:
         if desired_q is None:
             if goal.kind == "stream":
                 return self._hold_action(joints), "holding", []
-            failed = status(goal, "failed", "unreachable")
-            self._clear_goal()
-            return self._hold_action(joints), "idle", [failed]
+            return self._fail(goal, "unreachable", joints)
 
         self.last_q = desired_q
         desired = self.to_degrees(desired_q)
@@ -147,6 +151,10 @@ class ArmController:
             self.hold = action
             return action, "idle", [done]
         return action, "moving", []
+
+    def _fail(self, goal, reason, joints):
+        self._clear_goal()
+        return self._hold_action(joints), "idle", [status(goal, "failed", reason)]
 
     def _limit_step(self, joints, desired, dt):
         max_step = self.cfg["max_joint_speed"] * dt

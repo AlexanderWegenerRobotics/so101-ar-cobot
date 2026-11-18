@@ -58,6 +58,9 @@ class AprilTagTracker:
     def camera_pose(self):
         return self.T_base_camera
 
+    def close(self):
+        self.camera.disconnect()
+
     def _update(self):
         gray = cv2.cvtColor(self.camera.read_latest(), cv2.COLOR_RGB2GRAY)
         stamp = time.time()

@@ -6,7 +6,8 @@ from controls.kinematics import load_kinematics
 from interfaces.messages import ArmGoal, SafetyState, ToolTarget
 
 RATE = 30.0
-CFG = {"max_joint_speed": 60.0, "max_angular_speed": 1.0, "watchdog_timeout": 0.2, "goal_tolerance": 1.0}
+CFG = {"max_joint_speed": 60.0, "max_angular_speed": 1.0, "watchdog_timeout": 0.2, "goal_tolerance": 1.0,
+       "goal_timeout": 20.0}
 NAMES = ["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll"]
 IDENTITY_MAP = {name: {"sign": 1, "offset_deg": 0.0} for name in NAMES}
 HOME_Q = [0.0, -1.49, 0.0, 0.0, 0.0]
@@ -21,6 +22,7 @@ class Bench:
         self.joints = dict(START)
         self.now = 0.0
         self.messages = []
+        self.blocked = False
 
     def send(self, goal):
         self.messages += self.controller.on_goal(goal, self.joints, self.now)
@@ -33,7 +35,8 @@ class Bench:
             if stream is not None:
                 self.send(stream)
             action, messages = self.controller.update(self.joints, self.now)
-            self.joints = {name: action[name] for name in action}
+            if not self.blocked:
+                self.joints = {name: action[name] for name in action}
             self.messages += messages
 
     def states(self, topic="arm/status"):
@@ -146,6 +149,14 @@ def test_unreachable_goal_is_rejected_without_disturbing_running_goal():
     assert ("far", "rejected") in bench.states()
     bench.run(5.0)
     assert ("g1", "succeeded") in bench.states()
+
+
+def test_blocked_arm_makes_the_goal_fail_with_timeout():
+    bench = Bench()
+    bench.send(side_goal(bench))
+    bench.blocked = True
+    bench.run(CFG["goal_timeout"] + 2.0)
+    assert ("g1", "failed") in bench.states()
 
 
 def test_home_goal_moves_to_home():
