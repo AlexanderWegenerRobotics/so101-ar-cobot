@@ -23,3 +23,10 @@ sim:
     wrist_flex: {sign: 1, offset_deg: 0.0}
     wrist_roll: {sign: 1, offset_deg: 0.0, full_turn: true}
     gripper: {sign: 1, mode: range}
+
+controller:
+  rate_hz: 30
+  max_joint_speed: 60.0    # deg/s, cap per joint, scaled by the safety speed_scale
+  max_angular_speed: 1.0   # rad/s, tool pitch and roll
+  watchdog_timeout: 0.2    # s, safety messages and stream commands
+  goal_tolerance: 1.0      # deg, how close counts as reached
