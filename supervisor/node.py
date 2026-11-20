@@ -1,26 +1,53 @@
 """Safety supervisor: speed and separation monitoring between the operator's hands and the arm.
 
 Every tick: arm link points from arm/state (forward kinematics on the MuJoCo model, points along every moving link
-from the shoulder out; the fixed base is not counted) and
-all tracked hand joints (both hands, from `hand`). The minimum distance d (between points, minus link and finger
-radii) picks the zone:
+from the shoulder out; the fixed base is not counted) and the joints of every hand at its last real detection.
+For each hand the worst-case clearance is
 
-    d > slow_distance           clear   speed_scale 1
-    stop_distance < d < slow     slow    speed_scale falls linearly to 0 at stop_distance
-    d < stop_distance            stop    stop = true, the controller holds; released above stop + hysteresis
+    d = distance(arm now, hand when last seen) - link_radius - finger_radius - hand_speed * age
+
+where age is the time since that hand was last tracked. While tracking works age is about 0; when tracking drops
+out the hand could be anywhere in a sphere that grows at hand_speed, so the arm keeps going if the hand was far and
+stops if it was close. A lost hand is never forgotten, only a new tracked detection resets age.
+
+The smallest d over all hands picks the zone, with the separation distance S from config/supervisor.yaml:
+
+    d > S + slow_buffer         clear   speed_scale 1
+    S < d < S + slow_buffer     slow    speed_scale falls linearly to 0 at S
+    d < S                       stop    stop = true, the controller holds; released above S + hysteresis
+    no hand seen yet            clear
+    arm/state older than arm_max_age, or none yet: stop
 
 Goals from arm/goal go to arm/command unchanged (the controller applies the scale and the stop). Zone changes are
 logged with the distance, which is the data for the safety study.
 """
 import time
+from pathlib import Path
 
 import mujoco
 import numpy as np
+import yaml
 
 from interfaces.messages import ArmGoal, ArmState, HandState, SafetyState, Topic
 from interfaces.node import Node
 
+CONFIG = Path(__file__).resolve().parents[1] / "config" / "supervisor.yaml"
 ARM_BODIES = ["upper_arm", "lower_arm", "wrist", "gripper", "moving_jaw_so101_v1"]
+
+
+def load_config(params=None):
+    cfg = yaml.safe_load(CONFIG.read_text())
+    cfg.update(params or {})
+    return cfg
+
+
+def safe_distance(c):
+    t_react = c["latency"] + 1.0 / c["rate_hz"]
+    t_stop = c["stop_time"]
+    return (c["hand_speed"] * (t_react + t_stop)
+            + c["arm_speed"] * t_react
+            + c["arm_speed"] * t_stop / 2
+            + c["margin"])
 
 
 class SafetySupervisor(Node):
@@ -31,30 +58,30 @@ class SafetySupervisor(Node):
     def setup(self):
         from controls.kinematics import ARM_JOINTS, SO101Kinematics
         from hardware import load_robot_config
-        p = self.params
         cfg = load_robot_config()
         self.kin = SO101Kinematics(cfg.get("sim", {}).get("joint_map", {}))
         self.arm_joints = ARM_JOINTS
         self.bodies = [self.kin.model.body(b).id for b in ARM_BODIES]
         self.parents = [self.kin.model.body_parentid[b] for b in self.bodies]
-        self.slow = p.get("slow_distance", 0.25)
-        self.stop_d = p.get("stop_distance", 0.10)
-        self.hysteresis = p.get("hysteresis", 0.03)
-        self.link_radius = p.get("link_radius", 0.03)
-        self.finger_radius = p.get("finger_radius", 0.01)
-        self.hand_timeout = p.get("hand_timeout", 0.3)
-        self.enabled = p.get("enabled", True)
+        self.cfg = c = load_config(self.params)
+        self.rate_hz = float(c["rate_hz"])
+        self.S = safe_distance(c)
+        self.slow = self.S + c["slow_buffer"]
+        self.hysteresis = c["hysteresis"]
+        self.radii = c["link_radius"] + c["finger_radius"]
+        self.hand_speed = c["hand_speed"]
+        self.arm_max_age = c["arm_max_age"]
+        self.enabled = c["enabled"]
         self.arm_state = None
+        self.arm_time = None
         self.hands = {}
         self.zone = "clear"
         self.stopped = False
         self.zone_since = time.time()
-        self.closest = None
-        self.log.info(f"safety supervisor: slow below {self.slow:.2f} m, stop below {self.stop_d:.2f} m"
+        self.log.info(f"safety supervisor: separation distance S = {self.S:.3f} m, slow below {self.slow:.3f} m"
                       + ("" if self.enabled else " (DISABLED, monitoring only)"))
 
-    def arm_points(self):
-        joints = self.arm_state.joints
+    def arm_points(self, joints):
         q = self.kin.robot_to_q(joints)
         d = self.kin.data
         d.qpos[self.kin.qadr] = q
@@ -67,10 +94,15 @@ class SafetySupervisor(Node):
         pts += [g + s * (tip - g) for s in np.linspace(0, 1, 4)]
         return np.array(pts)
 
-    def hand_points(self, now):
-        pts = [np.asarray(m.joints, float) for m, t in self.hands.values()
-               if now - t < self.hand_timeout and m.tracked and m.joints]
-        return np.concatenate(pts) if pts else None
+    def worst_case(self, now):
+        arm = self.arm_points(self.arm_state.joints)
+        best = None
+        for joints, seen in self.hands.values():
+            gap = np.linalg.norm(arm[:, None, :] - joints[None, :, :], axis=2).min() - self.radii
+            d = float(gap) - self.hand_speed * (now - seen)
+            if best is None or d < best[0]:
+                best = (d, now - seen)
+        return best
 
     def step(self):
         now = time.time()
@@ -78,25 +110,24 @@ class SafetySupervisor(Node):
             if topic == Topic.ARM_GOAL and isinstance(msg, ArmGoal):
                 self.publish(Topic.ARM_COMMAND, msg)
             elif topic == Topic.ARM_STATE and isinstance(msg, ArmState):
-                self.arm_state = msg
-            elif topic == Topic.HAND and isinstance(msg, HandState):
-                self.hands[msg.side] = (msg, now)
-        dist = None
-        if self.arm_state is not None:
-            hands = self.hand_points(now)
-            if hands is not None:
-                arm = self.arm_points()
-                dmat = np.linalg.norm(arm[:, None, :] - hands[None, :, :], axis=2)
-                dist = float(dmat.min()) - self.link_radius - self.finger_radius
-        if dist is None:
-            scale, zone = 1.0, "clear"
-        elif dist < self.stop_d or (self.stopped and dist < self.stop_d + self.hysteresis):
-            scale, zone = 0.0, "stop"
-        elif dist < self.slow:
-            scale = (dist - self.stop_d) / (self.slow - self.stop_d)
-            zone = "slow"
+                self.arm_state, self.arm_time = msg, now
+            elif topic == Topic.HAND and isinstance(msg, HandState) and msg.tracked and msg.joints:
+                self.hands[msg.side] = (np.asarray(msg.joints, float), now)
+
+        dist, age = None, 0.0
+        if self.arm_state is None or now - self.arm_time > self.arm_max_age:
+            scale, zone, reason = 0.0, "stop", "no arm state"
+        elif not self.hands:
+            scale, zone, reason = 1.0, "clear", ""
         else:
-            scale, zone = 1.0, "clear"
+            dist, age = self.worst_case(now)
+            reason = f"hand {dist:.2f} m from the arm" + (f", not seen for {age:.1f} s" if age > 2.0 / self.rate_hz else "")
+            if dist < self.S or (self.stopped and dist < self.S + self.hysteresis):
+                scale, zone = 0.0, "stop"
+            elif dist < self.slow:
+                scale, zone = (dist - self.S) / (self.slow - self.S), "slow"
+            else:
+                scale, zone = 1.0, "clear"
         self.stopped = zone == "stop"
         if zone != self.zone:
             held = now - self.zone_since
@@ -108,6 +139,5 @@ class SafetySupervisor(Node):
         else:
             stop = zone == "stop"
         self.publish(Topic.SAFETY, SafetyState(
-            speed_scale=round(float(np.clip(scale, 0.0, 1.0)), 3), stop=stop, zone=zone,
-            reason="" if dist is None else f"hand {dist:.2f} m from the arm",
+            speed_scale=round(float(np.clip(scale, 0.0, 1.0)), 3), stop=stop, zone=zone, reason=reason,
             min_distance=None if dist is None else round(dist, 4)))

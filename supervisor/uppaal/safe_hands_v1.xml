@@ -1,0 +1,253 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE nta PUBLIC '-//Uppaal Team//DTD Flat System 1.6//EN' 'http://www.it.uu.se/research/group/darts/uppaal/flat-1_6.dtd'>
+<nta>
+	<declaration>// Safe Hands supervisor model v1. Time unit: 1 = 1 ms.
+
+// Timing (should match config/supervisor.yaml)
+const int PERIOD  = 33;   // supervisor loop period (30 Hz)
+const int MAX_AGE = 200;  // hand data older than this -&gt; stop
+const int T_STOP  = 100;  // time for the arm to brake to zero
+
+// Hand speed assumptions (zone width / hand speed)
+const int T_NEAR  = 300;  // min time to cross the slow band (0.15 m at 0.5 m/s)
+const int T_CLOSE = 200;  // min time from entering stop zone to touching arm (0.10 m at 0.5 m/s)
+
+// Set to true to let hand tracking drop out
+const bool CAN_LOSE_TRACKING = false;
+
+const int FAR = 0;
+const int NEAR = 1;
+const int CLOSE = 2;
+
+int[0,2] zone = FAR;   // where the hand really is
+int[0,2] seen = FAR;   // what the supervisor last saw
+bool fresh = true;     // is hand data arriving?
+clock age;             // time since hand data stopped arriving
+
+broadcast chan cmd_go, cmd_slow, cmd_stop;
+
+void sample() {
+    if (fresh) seen = zone;
+}</declaration>
+	<template>
+		<name>Hand</name>
+		<declaration>clock h;</declaration>
+		<location id="h0" x="0" y="0">
+			<name x="-10" y="-34">Far</name>
+		</location>
+		<location id="h1" x="200" y="0">
+			<name x="190" y="-34">Near</name>
+		</location>
+		<location id="h2" x="400" y="0">
+			<name x="390" y="-34">Close</name>
+		</location>
+		<location id="h3" x="600" y="0">
+			<name x="590" y="-34">Contact</name>
+		</location>
+		<init ref="h0"/>
+		<transition id="ht0">
+			<source ref="h0"/>
+			<target ref="h1"/>
+			<label kind="assignment" x="60" y="-60">zone = NEAR, h = 0</label>
+			<nail x="100" y="-40"/>
+		</transition>
+		<transition id="ht1">
+			<source ref="h1"/>
+			<target ref="h0"/>
+			<label kind="assignment" x="70" y="45">zone = FAR</label>
+			<nail x="100" y="40"/>
+		</transition>
+		<transition id="ht2">
+			<source ref="h1"/>
+			<target ref="h2"/>
+			<label kind="guard" x="250" y="-80">h &gt;= T_NEAR</label>
+			<label kind="assignment" x="250" y="-60">zone = CLOSE, h = 0</label>
+			<nail x="300" y="-40"/>
+		</transition>
+		<transition id="ht3">
+			<source ref="h2"/>
+			<target ref="h1"/>
+			<label kind="assignment" x="250" y="45">zone = NEAR, h = 0</label>
+			<nail x="300" y="40"/>
+		</transition>
+		<transition id="ht4">
+			<source ref="h2"/>
+			<target ref="h3"/>
+			<label kind="guard" x="450" y="-60">h &gt;= T_CLOSE</label>
+			<nail x="500" y="-40"/>
+		</transition>
+		<transition id="ht5">
+			<source ref="h3"/>
+			<target ref="h2"/>
+			<label kind="assignment" x="470" y="45">h = 0</label>
+			<nail x="500" y="40"/>
+		</transition>
+	</template>
+	<template>
+		<name>Sensor</name>
+		<location id="s0" x="0" y="0">
+			<name x="-10" y="-34">Ok</name>
+		</location>
+		<location id="s1" x="250" y="0">
+			<name x="240" y="-34">Lost</name>
+		</location>
+		<init ref="s0"/>
+		<transition id="st0">
+			<source ref="s0"/>
+			<target ref="s1"/>
+			<label kind="guard" x="50" y="-80">CAN_LOSE_TRACKING</label>
+			<label kind="assignment" x="50" y="-60">fresh = false, age = 0</label>
+			<nail x="125" y="-40"/>
+		</transition>
+		<transition id="st1">
+			<source ref="s1"/>
+			<target ref="s0"/>
+			<label kind="assignment" x="90" y="45">fresh = true</label>
+			<nail x="125" y="40"/>
+		</transition>
+	</template>
+	<template>
+		<name>Supervisor</name>
+		<declaration>clock s;</declaration>
+		<location id="v0" x="0" y="0">
+			<name x="-30" y="-34">Wait</name>
+			<label kind="invariant" x="-40" y="17">s &lt;= PERIOD</label>
+		</location>
+		<location id="v1" x="300" y="0">
+			<name x="310" y="-34">Decide</name>
+			<committed/>
+		</location>
+		<init ref="v0"/>
+		<transition id="vt0">
+			<source ref="v0"/>
+			<target ref="v1"/>
+			<label kind="guard" x="100" y="-40">s == PERIOD</label>
+			<label kind="assignment" x="100" y="-20">s = 0, sample()</label>
+		</transition>
+		<transition id="vt1">
+			<source ref="v1"/>
+			<target ref="v0"/>
+			<label kind="guard" x="80" y="-200">seen == CLOSE</label>
+			<label kind="synchronisation" x="80" y="-180">cmd_stop!</label>
+			<nail x="300" y="-160"/>
+			<nail x="0" y="-160"/>
+		</transition>
+		<transition id="vt2">
+			<source ref="v1"/>
+			<target ref="v0"/>
+			<label kind="guard" x="80" y="-130">!fresh &amp;&amp; age &gt;= MAX_AGE</label>
+			<label kind="synchronisation" x="80" y="-110">cmd_stop!</label>
+			<nail x="300" y="-90"/>
+			<nail x="0" y="-90"/>
+		</transition>
+		<transition id="vt3">
+			<source ref="v1"/>
+			<target ref="v0"/>
+			<label kind="guard" x="80" y="60">seen == NEAR &amp;&amp; fresh</label>
+			<label kind="synchronisation" x="80" y="80">cmd_slow!</label>
+			<nail x="300" y="100"/>
+			<nail x="0" y="100"/>
+		</transition>
+		<transition id="vt4">
+			<source ref="v1"/>
+			<target ref="v0"/>
+			<label kind="guard" x="80" y="130">seen == NEAR &amp;&amp; !fresh &amp;&amp; age &lt; MAX_AGE</label>
+			<label kind="synchronisation" x="80" y="150">cmd_slow!</label>
+			<nail x="300" y="170"/>
+			<nail x="0" y="170"/>
+		</transition>
+		<transition id="vt5">
+			<source ref="v1"/>
+			<target ref="v0"/>
+			<label kind="guard" x="80" y="200">seen == FAR &amp;&amp; fresh</label>
+			<label kind="synchronisation" x="80" y="220">cmd_go!</label>
+			<nail x="300" y="240"/>
+			<nail x="0" y="240"/>
+		</transition>
+		<transition id="vt6">
+			<source ref="v1"/>
+			<target ref="v0"/>
+			<label kind="guard" x="80" y="270">seen == FAR &amp;&amp; !fresh &amp;&amp; age &lt; MAX_AGE</label>
+			<label kind="synchronisation" x="80" y="290">cmd_go!</label>
+			<nail x="300" y="310"/>
+			<nail x="0" y="310"/>
+		</transition>
+	</template>
+	<template>
+		<name>Arm</name>
+		<declaration>clock b;</declaration>
+		<location id="a0" x="0" y="0">
+			<name x="-20" y="-34">Moving</name>
+		</location>
+		<location id="a1" x="250" y="0">
+			<name x="240" y="-34">Slow</name>
+		</location>
+		<location id="a2" x="250" y="200">
+			<name x="265" y="190">Braking</name>
+			<label kind="invariant" x="265" y="210">b &lt;= T_STOP</label>
+		</location>
+		<location id="a3" x="0" y="200">
+			<name x="-80" y="190">Stopped</name>
+		</location>
+		<init ref="a0"/>
+		<transition id="at0">
+			<source ref="a0"/>
+			<target ref="a1"/>
+			<label kind="synchronisation" x="90" y="-60">cmd_slow?</label>
+			<nail x="125" y="-40"/>
+		</transition>
+		<transition id="at1">
+			<source ref="a1"/>
+			<target ref="a0"/>
+			<label kind="synchronisation" x="95" y="45">cmd_go?</label>
+			<nail x="125" y="40"/>
+		</transition>
+		<transition id="at2">
+			<source ref="a0"/>
+			<target ref="a2"/>
+			<label kind="synchronisation" x="100" y="90">cmd_stop?</label>
+			<label kind="assignment" x="100" y="110">b = 0</label>
+		</transition>
+		<transition id="at3">
+			<source ref="a1"/>
+			<target ref="a2"/>
+			<label kind="synchronisation" x="260" y="80">cmd_stop?</label>
+			<label kind="assignment" x="260" y="100">b = 0</label>
+		</transition>
+		<transition id="at4">
+			<source ref="a2"/>
+			<target ref="a3"/>
+			<label kind="guard" x="90" y="205">b == T_STOP</label>
+		</transition>
+		<transition id="at5">
+			<source ref="a3"/>
+			<target ref="a0"/>
+			<label kind="synchronisation" x="-80" y="90">cmd_go?</label>
+		</transition>
+		<transition id="at6">
+			<source ref="a3"/>
+			<target ref="a1"/>
+			<label kind="synchronisation" x="60" y="140">cmd_slow?</label>
+			<nail x="125" y="150"/>
+		</transition>
+	</template>
+	<system>system Hand, Sensor, Supervisor, Arm;</system>
+	<queries>
+		<query>
+			<formula>A[] not deadlock</formula>
+			<comment>The system never gets stuck.</comment>
+		</query>
+		<query>
+			<formula>A[] (Hand.Contact imply Arm.Stopped)</formula>
+			<comment>SAFETY: whenever the hand touches the arm, the arm is already fully stopped.</comment>
+		</query>
+		<query>
+			<formula>E&lt;&gt; Hand.Contact</formula>
+			<comment>Sanity: the hand can actually reach the arm (so the safety check is not trivially true).</comment>
+		</query>
+		<query>
+			<formula>E&lt;&gt; (Arm.Moving and Hand.Far)</formula>
+			<comment>Liveness sanity: the arm can get back to full speed.</comment>
+		</query>
+	</queries>
+</nta>

@@ -4,7 +4,6 @@ profiles:
     nodes:
       - node: perception.node:ObjectPublisher
       - node: supervisor.node:SafetySupervisor
-        params: {slow_distance: 0.25, stop_distance: 0.10}
       - node: controls.node:ArmController
       - node: hardware.workspace:WorkspacePublisher
       - node: sim.hand:SimHand
@@ -17,7 +16,6 @@ profiles:
     nodes:
       - node: perception.node:ObjectPublisher
       - node: supervisor.node:SafetySupervisor
-        params: {slow_distance: 0.25, stop_distance: 0.10}
       - node: controls.node:ArmController
       - node: hardware.workspace:WorkspacePublisher
       - node: sim.hand:SimHand
@@ -30,7 +28,6 @@ profiles:
     nodes:
       - node: perception.node:ObjectPublisher
       - node: supervisor.node:SafetySupervisor
-        params: {slow_distance: 0.25, stop_distance: 0.10}
       - node: controls.node:ArmController
       - node: hardware.workspace:WorkspacePublisher
       - node: sim.hand:SimHand
@@ -44,7 +41,6 @@ profiles:
     nodes:
       - node: perception.node:ObjectPublisher
       - node: supervisor.node:SafetySupervisor
-        params: {slow_distance: 0.25, stop_distance: 0.10}
       - node: controls.node:ArmController
       - node: hardware.workspace:WorkspacePublisher
       - node: sim.hand:SimHand
