@@ -24,7 +24,17 @@ def main():
     parser.add_argument("--config", default=str(DEFAULT_LAUNCH))
     parser.add_argument("--no-broker", action="store_true")
     args = parser.parse_args()
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s: %(message)s", datefmt="%H:%M:%S")
+    log_dir = ROOT / "logs"
+    log_dir.mkdir(exist_ok=True)
+    log_file = log_dir / f"{time.strftime('%Y%m%d_%H%M%S')}_{args.profile}.log"
+    console = logging.StreamHandler()
+    console.setLevel(logging.INFO)
+    logging.basicConfig(level=logging.DEBUG, format="%(asctime)s.%(msecs)03d %(name)s %(levelname)s: %(message)s",
+                        datefmt="%H:%M:%S", handlers=[logging.FileHandler(log_file), console])
+    console.setFormatter(logging.Formatter("%(asctime)s %(name)s: %(message)s", datefmt="%H:%M:%S"))
+    for noisy in ("matplotlib", "PIL", "urllib3", "asyncio"):
+        logging.getLogger(noisy).setLevel(logging.WARNING)
+    logging.info(f"logging to {log_file}")
 
     launch = yaml.safe_load(Path(args.config).read_text())
     profile = launch["profiles"][args.profile]
