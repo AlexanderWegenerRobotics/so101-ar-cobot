@@ -64,3 +64,4 @@ sim/generated/
 
 # Render outputs in the repo root
 /*.png
+Claude outputs/
