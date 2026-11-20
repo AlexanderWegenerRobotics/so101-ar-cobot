@@ -13,12 +13,12 @@ The Quest draws the MuJoCo scene in the robot base frame and follows the sim liv
 | `WorldAnchor` | The robot base frame in the Unity scene. Everything from the sim is placed under it. For now it is put in front of you on start and with the A button (R in the editor); later the QR calibration sets it |
 | `WorldRenderer` | Builds the scene from `sim/scene_info` (meshes, boxes, tag textures) and moves the bodies with `sim/scene` |
 | `HandStreamer` | Sends both tracked hands as `hand` (26 OpenXR joints from `OVRSkeleton`, pinch, pointing ray), in the base frame |
-| `WristMenu` | Buttons above your left wrist, shown when you look at it, pressed with your right index fingertip. Buttons in the `settings` group sit in a second row that the `Settings` button opens |
+| `WristMenu` | Buttons 7.5 cm above the back of your left hand, tilted halfway toward your face: turn the back of your hand toward you to show them. They move with the hand, not with your head, and freeze in place as soon as your right index finger comes within 16 cm, so covering the left hand while pressing does not move them. A button triggers when your fingertip touches its surface. Buttons in the `settings` group sit in a second row that the `Settings` button opens |
 | `CobotWristActions` | What the buttons do. Main row: `Table` (place the table in front of you), `Reset` (next trial: arm home, cubes back, wait for Go), `Go/Stop` (label shows the state), `Settings`. Settings popup (closes after 6 s or after a press): `Reach` (workspace overlay on/off), `Tasks` (task overlay on/off), `Fast` / `Even` / `Robot max` (robot/human split, the selected one is bright) |
 | `ButtonIcons` | Draws the round button images (colored disc, white ring, white icon) |
 | `HandJoints` | Small helper to read joint positions from Meta's hand tracking |
 | `WorkspaceOverlay` | Draws `arm/workspace` flat on the table: green = the arm can grasp there, orange = it can only reach there |
-| `TaskOverlay` | Draws the task plan from `task/state`: a ring around every open cube and a label above it, plus a summary line above the robot. Poke a label: the robot does that cube next |
+| `TaskOverlay` + `TaskTag` | Draws the task plan from `task/state`: a ring on the table around every open cube, a card above it (owner, order, hint), the suggested path for your next cube, and a summary line above the robot. Hold a card to assign |
 | `StatusLabel` | Small text in front of the camera while not connected or not live |
 
 ### Setup
@@ -40,22 +40,32 @@ To add a button: add an entry to `Buttons` on the `WristMenu` component (id, lab
 
 ### Task overlay
 
-| Ring | Label | Meaning |
-|---|---|---|
-| blue | `robot: next`, `robot 1`, `robot 2` | planned for the robot, in this order (`robot: next` = you chose it) |
-| blue, pulsing | `robot: now` | the robot is working on it |
-| orange | `you 1`, `you 2` | planned for you; the robot could do it, the plan just prefers you |
-| orange, pulsing | `you: NEXT` | what you should do now |
-| red | `you ...` + `robot can't: too heavy` / `out of reach` / `tilted` / `robot failed` | only you can do it |
-| | `(set by you)` | you assigned it yourself |
+Every open cube has a ring on the table and a card floating above it, turned toward you.
 
-An orange line on the table shows the suggested path to your next cube and on to its bin, always around the robot base. `you: NEXT in 6 s` means the plan wants you to wait until the robot is done with its cube.
+| Card | Meaning |
+|---|---|
+| blue `ROBOT · NOW` (pulsing) | the robot is working on it |
+| blue `ROBOT · NEXT` | the robot does this one next (you chose it) |
+| blue `ROBOT · 2` | planned for the robot, in this order |
+| orange `YOU · NEXT` (pulsing) | what you should do now; `YOU · NEXT IN 6s` = wait for the robot first |
+| orange `YOU · 2` | planned for you; the robot could do it, the plan just prefers you |
+| red `YOU · 1`, `robot can't: too heavy` | only you can do it (too heavy, out of reach, tilted, robot failed) |
+| `· set by you` | you assigned it |
 
-Hold your index fingertip on a label for about half a second: the robot does that cube next (`robot: next`), and the rest of the plan is recomputed around it. If the robot is only reaching for another cube it switches right away; if it already holds one it places that first. Poke the `robot: next` cube again to take it yourself. A red cube can't go to the robot; its label flashes the reason.
+The second line on each card says what holding it does. Touch a card with your index fingertip and hold: a bar
+fills along the bottom, and when it is full (about half a second) the assignment is sent:
 
-The line above the robot shows the trial, how many cubes each of you has, the estimated time until done, the mix and the last event. If you take a different cube than suggested, the plan adapts.
+- a cube the robot can do: the robot does it next (`ROBOT · NEXT`), the rest of the plan is recomputed around it.
+  If the robot is only reaching for another cube it switches right away; if it holds one it places that first.
+- the `ROBOT · NEXT` cube: you take it yourself.
+- a red cube: the card flashes `ROBOT CAN'T` and the reason.
 
-The task node starts paused in the `quest` and `vr` profiles: press `Go` on the wrist to start. The line above the robot shows the trial number.
+An orange line on the table shows the suggested path to your next cube and on to its bin, always around the robot
+base. The line above the robot shows the trial, how many cubes each of you has, the estimated time until done, the
+mix and the last event. If you take a different cube than suggested, the plan adapts.
+
+The task node starts paused in the `quest` and `vr` profiles: press `Go` on the wrist to start. When the robot has
+no cube left in the plan it drives home and waits there.
 
 ### Meshes
 

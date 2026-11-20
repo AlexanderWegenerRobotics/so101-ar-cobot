@@ -127,6 +127,10 @@ class TaskManager(Node):
         self.reset_goal = None
         self.reset_world_at = None
         self.human_next = None
+        self.at_home = True
+        self.home_goal = None
+        self.idle_since = None
+        self.idle_home_delay = p.get("idle_home_delay", 1.0)
         self.trials = TrialLog(self.log, self.allocator.cfg.alpha)
         self.trial_pending = True
         self.log.info(f"task manager up, mode {self.mode}, alpha {self.allocator.cfg.alpha}")
@@ -325,6 +329,22 @@ class TaskManager(Node):
 
     # ----- robot execution
 
+    def _go_home_when_idle(self):
+        """Nothing left for the robot (all its cubes done, or the plan gives it none): drive home once, so it is
+        out of the way and starts the next cube from the same pose."""
+        robot_left = self.plan is not None and any(
+            self.tracks[t].status == "pending" for t in self.plan.sequence(ROBOT))
+        now = time.time()
+        if robot_left or self.at_home or self.home_goal is not None:
+            self.idle_since = None
+            return
+        if self.idle_since is None:
+            self.idle_since = now
+        elif now - self.idle_since > self.idle_home_delay:
+            self.home_goal = self._goal("home", gripper=GRIPPER_OPEN, speed=0.10)
+            self.log.info("robot has nothing to do, going home")
+            self.idle_since = None
+
     def _start_next_job(self):
         if self.plan is None:
             return
@@ -338,6 +358,8 @@ class TaskManager(Node):
         tr = self.tracks[tag]
         a = self.plan.assignments[tag]
         self.job = RobotJob(tag, time.time(), a.end - a.start)
+        self.at_home = False
+        self.home_goal = None
         tr.status = "robot_active"
         tr.robot_first = False
         self.log.info(f"robot starts tag {tag} (estimate {self.job.estimate:.1f} s)")
@@ -622,6 +644,10 @@ class TaskManager(Node):
             elif topic == Topic.ARM_STATUS:
                 if msg.goal_id == self.reset_goal and msg.status in ("succeeded", "failed", "rejected", "preempted"):
                     self._reset_arm_done(msg.status, msg.reason)
+                    self.at_home = msg.status == "succeeded"
+                if msg.goal_id == self.home_goal and msg.status in ("succeeded", "failed", "rejected", "preempted"):
+                    self.home_goal = None
+                    self.at_home = msg.status == "succeeded"
                 if self.job is not None and msg.goal_id == self.job.goal_id:
                     self.job.goal_status = msg.status
                     self.job.goal_reason = msg.reason
@@ -651,6 +677,8 @@ class TaskManager(Node):
                 self._step_job()
             elif time.time() >= getattr(self, "retry_after", 0.0):
                 self._start_next_job()
+            if self.job is None:
+                self._go_home_when_idle()
         now = time.time()
         if self.changed or now - self.last_publish > 0.2:
             self._publish_state()

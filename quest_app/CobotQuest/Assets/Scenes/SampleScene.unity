@@ -1406,8 +1406,11 @@ MonoBehaviour:
   buttonSpacing: 0.055
   labelHeight: 0.012
   hoverRadius: 0.045
-  offsetTowardHead: 0.07
-  lookThreshold: 0.75
+  offsetAboveHand: 0.05
+  offsetAlongHand: -0.02
+  showFacing: 0.55
+  hideFacing: 0.35
+  smoothing: 18
   maxDistance: 0.6
   pressRadius: 0.018
   releaseRadius: 0.035

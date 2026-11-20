@@ -31,13 +31,14 @@ ZONES = [
 
 GRID = {"x": [-0.5, 0.6], "y": [-0.55, 0.55], "res": 0.002}
 SAMPLES = 64
+MAP_VERSION = 2
 TABLE_Z = 0.0
 MIN_LINK_Z = -0.004
 
 
 def model_hash():
     h = hashlib.sha1(MODEL_XML.read_bytes())
-    h.update(json.dumps([ZONES, GRID, SAMPLES]).encode())
+    h.update(json.dumps([ZONES, GRID, SAMPLES, MAP_VERSION]).encode())
     return h.hexdigest()[:10]
 
 
@@ -98,9 +99,7 @@ def rasterize(samples, pan_axis, pan_range, zone):
     dx, dy = X - pan_axis[0], Y - pan_axis[1]
     rho = np.hypot(dx, dy)
     k = np.round(rho / res).astype(int)
-    fwd = np.isin(k, list(bins)) & (np.abs(np.arctan2(dy, dx)) <= pan_range[1])
-    back = np.isin(-k, list(bins)) & (np.abs(np.arctan2(-dy, -dx)) <= pan_range[1])
-    mask = (fwd | back).astype(np.uint8)
+    mask = (np.isin(k, list(bins)) & (np.abs(np.arctan2(dy, dx)) <= pan_range[1])).astype(np.uint8)
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
     mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
     mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)

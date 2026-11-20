@@ -8,9 +8,10 @@ namespace Cobot
     {
         [SerializeField] WorldAnchor anchor;
         [SerializeField] float ringRadius = 0.032f;
-        [SerializeField] float labelHeight = 0.075f;
-        [SerializeField] float pokeRadius = 0.03f;
-        [SerializeField] float pokeDwell = 0.6f;
+        [SerializeField] float tagHeight = 0.09f;
+        [SerializeField] float hoverDepth = 0.04f;
+        [SerializeField] float pressDepth = 0.006f;
+        [SerializeField] float pokeDwell = 0.45f;
         [SerializeField] float pokeCooldown = 1.5f;
         [SerializeField] Vector3 summaryPosition = new Vector3(0.05f, 0f, 0.42f);
 
@@ -23,13 +24,15 @@ namespace Cobot
         {
             public Transform root;
             public LineRenderer ring;
-            public TextMesh label;
-            public Transform labelT;
+            public TaskTag tag;
             public JObject task;
+            public bool hover;
             public Vector3 basePos;
             public float pokeStart = -1f;
             public float flashUntil;
             public string flash;
+            public string flashSub = "";
+            public Color flashColor = Color.white;
         }
 
         readonly Dictionary<int, Marker> markers = new Dictionary<int, Marker>();
@@ -154,8 +157,7 @@ namespace Cobot
                 m.ring.SetPosition(i, new Vector3(Mathf.Cos(a) * ringRadius, 0f, Mathf.Sin(a) * ringRadius));
             }
 
-            m.label = MakeText("label", m.root, 0.0016f, 64);
-            m.labelT = m.label.transform;
+            m.tag = new TaskTag(m.root, font);
             return m;
         }
 
@@ -198,92 +200,108 @@ namespace Cobot
 
                 var show = status != "done" || Time.time < m.flashUntil;
                 m.ring.enabled = show;
-                m.label.gameObject.SetActive(show);
+                m.tag.SetActive(show);
                 if (!show)
                     continue;
 
                 m.ring.transform.localPosition = BaseFrame.ToUnity(p.x, p.y, 0.002f);
-                m.labelT.localPosition = BaseFrame.ToUnity(p.x, p.y, p.z + labelHeight - 0.015f);
-                if (head != null)
-                    m.labelT.rotation = Quaternion.LookRotation(m.labelT.position - head.position, Vector3.up);
+                m.tag.Face(anchor.transform.TransformPoint(BaseFrame.ToUnity(p.x, p.y, tagHeight)), head);
 
                 Color color;
-                string text;
+                string title;
+                string sub;
+                var emphasize = false;
                 var width = 0.004f;
                 if (status == "robot_active" || tag == activeTag)
                 {
                     color = RobotColor;
-                    text = "robot: now";
+                    title = "ROBOT · NOW";
+                    sub = "working on it";
+                    emphasize = true;
                     width = 0.004f + 0.004f * pulse;
                 }
                 else if (status == "human_active")
                 {
                     color = HumanColor;
-                    text = "you: carrying";
+                    title = "YOU · CARRYING";
+                    sub = "into its bin";
                 }
                 else if (owner == "robot")
                 {
                     color = RobotColor;
-                    text = locked && order == 0 ? "robot: next" : $"robot {order + 1}";
+                    var next = locked && order == 0;
+                    title = next ? "ROBOT · NEXT" : $"ROBOT · {order + 1}";
+                    sub = next ? "hold: take it yourself" : "hold: robot does it next";
                 }
                 else if (owner == "human")
                 {
                     color = robotOk ? HumanColor : HumanOnlyColor;
                     var wait = m.task["est_start"] != null ? (float)m.task["est_start"] : 0f;
-                    text = tag == nextTag ? (wait > 1f ? $"you: NEXT in {wait:0} s" : "you: NEXT") : $"you {order + 1}";
-                    if (!robotOk)
-                        text += "\nrobot can't: " + Pretty(robotReason);
-                    if (tag == nextTag)
+                    var isNext = tag == nextTag;
+                    title = isNext ? (wait > 1f ? $"YOU · NEXT IN {wait:0}s" : "YOU · NEXT") : $"YOU · {order + 1}";
+                    sub = robotOk ? "hold: give to robot" : "robot can't: " + Pretty(robotReason);
+                    emphasize = isNext;
+                    if (isNext)
                         width = 0.005f + 0.005f * pulse;
                 }
                 else
                 {
                     color = Color.gray;
-                    text = "";
+                    title = "";
+                    sub = "";
                 }
-                if (locked)
-                    text += "\n(set by you)";
+                if (locked && status == "pending")
+                    sub += " · set by you";
                 if (Time.time < m.flashUntil)
                 {
-                    text = m.flash;
-                    color = status == "done" ? DoneColor : HumanOnlyColor;
+                    title = m.flash;
+                    sub = m.flashSub;
+                    color = status == "done" ? DoneColor : m.flashColor;
                 }
+                var progress = m.pokeStart >= 0f ? (Time.time - m.pokeStart) / pokeDwell : 0f;
+                m.tag.Set(title, sub, color, emphasize, progress, m.hover);
                 m.ring.startColor = m.ring.endColor = color;
                 m.ring.widthMultiplier = width;
-                m.label.text = text;
-                m.label.color = color;
             }
             Poke();
         }
 
         void Poke()
         {
-            if (Time.time - lastPoke < pokeCooldown)
-                return;
+            var tips = new List<Vector3>();
             foreach (var isLeft in new[] { false, true })
+                if (HandJoints.TryGetPosition(isLeft, OVRSkeleton.BoneId.XRHand_IndexTip, out var tip))
+                    tips.Add(tip);
+            var cooling = Time.time - lastPoke < pokeCooldown;
+            foreach (var kv in markers)
             {
-                if (!HandJoints.TryGetPosition(isLeft, OVRSkeleton.BoneId.XRHand_IndexTip, out var tip))
-                    continue;
-                foreach (var kv in markers)
+                var m = kv.Value;
+                m.hover = false;
+                var pressing = false;
+                if (m.task != null && m.tag.root.gameObject.activeInHierarchy)
                 {
-                    var m = kv.Value;
-                    if (!m.label.gameObject.activeInHierarchy || m.task == null)
-                        continue;
-                    var near = Vector3.Distance(tip, m.labelT.position) < pokeRadius;
-                    if (!near)
+                    foreach (var tip in tips)
                     {
-                        m.pokeStart = -1f;
-                        continue;
+                        if (!m.tag.Touch(tip, out var depth) || depth < -hoverDepth)
+                            continue;
+                        m.hover = true;
+                        if (depth > -pressDepth)
+                            pressing = true;
                     }
-                    if (m.pokeStart < 0f)
-                        m.pokeStart = Time.time;
-                    else if (Time.time - m.pokeStart > pokeDwell)
-                    {
-                        m.pokeStart = -1f;
-                        lastPoke = Time.time;
-                        Reassign(kv.Key, m);
-                        return;
-                    }
+                }
+                if (!pressing || cooling)
+                {
+                    m.pokeStart = -1f;
+                    continue;
+                }
+                if (m.pokeStart < 0f)
+                    m.pokeStart = Time.time;
+                else if (Time.time - m.pokeStart > pokeDwell)
+                {
+                    m.pokeStart = -1f;
+                    lastPoke = Time.time;
+                    Reassign(kv.Key, m);
+                    return;
                 }
             }
         }
@@ -296,8 +314,11 @@ namespace Cobot
                 return;
             if (!(bool)m.task["robot_ok"])
             {
-                m.flash = "robot can't:\n" + Pretty((string)m.task["robot_reason"]);
+                m.flash = "ROBOT CAN'T";
+                m.flashSub = Pretty((string)m.task["robot_reason"]);
+                m.flashColor = HumanOnlyColor;
                 m.flashUntil = Time.time + 1.5f;
+                lastPoke = Time.time;
                 return;
             }
             var robotNext = owner == "robot" && (int)m.task["order"] == 0 &&
@@ -312,12 +333,16 @@ namespace Cobot
             {
                 msg["kind"] = "assign";
                 msg["owner"] = "human";
-                m.flash = "-> you";
+                m.flash = "YOURS NOW";
+                m.flashSub = "";
+                m.flashColor = HumanColor;
             }
             else
             {
                 msg["kind"] = "select_object";
-                m.flash = "-> robot next";
+                m.flash = "ROBOT · NEXT";
+                m.flashSub = "sent";
+                m.flashColor = RobotColor;
             }
             m.flashUntil = Time.time + 0.8f;
             CobotBridge.Instance.Publish(Topics.OperatorCommand, msg);

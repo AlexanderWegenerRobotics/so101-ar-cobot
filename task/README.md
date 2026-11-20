@@ -87,7 +87,8 @@ Step machine over `arm/goal`: `approach` (6 cm above, gripper open) -> `descend`
 (gripper must stop on the cube, above 6) -> `carry` (lift and travel to a free spot in the bin as one goal, grasp
 monitored every tick: gripper reading and cube distance from the tool) -> `release` -> `check_place` (cube inside
 the bin). Bins have 4 drop spots (2x2, 2.5 cm off center); the robot picks the one farthest from cubes already
-there. A failure opens the gripper, waits 1 s and replans; after 3 failures the cube goes to the human. A move that
+there. When the plan has no cube left for the robot (all done, or everything open belongs to the human) it drives home
+after 1 s (`idle_home_delay`) and waits there. A failure opens the gripper, waits 1 s and replans; after 3 failures the cube goes to the human. A move that
 fails as `blocked` (arm hit something, see controls) does not count as an attempt.
 
 ## task/state

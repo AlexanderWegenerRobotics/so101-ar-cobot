@@ -29,8 +29,16 @@ namespace Cobot
         [SerializeField] float buttonSpacing = 0.055f;
         [SerializeField] float labelHeight = 0.012f;
         [SerializeField] float hoverRadius = 0.045f;
-        [SerializeField] float offsetTowardHead = 0.07f;
-        [SerializeField] float lookThreshold = 0.75f;
+        [SerializeField] float offsetAboveHand = 0.075f;
+        [SerializeField] float offsetAlongHand = -0.02f;
+        [SerializeField] float showFacing = 0.55f;
+        [SerializeField] float hideFacing = 0.35f;
+        [SerializeField] float smoothing = 18f;
+        [SerializeField] float faceHeadBlend = 0.5f;
+        [SerializeField] float lockRadius = 0.16f;
+        [SerializeField] float hoverDepth = 0.035f;
+        [SerializeField] float pressDepth = 0.004f;
+        [SerializeField] float rearmDepth = 0.02f;
         [SerializeField] float maxDistance = 0.6f;
         [SerializeField] float pressRadius = 0.018f;
         [SerializeField] float releaseRadius = 0.035f;
@@ -39,6 +47,12 @@ namespace Cobot
         [SerializeField] float popupSeconds = 6f;
 
         public const string SettingsId = "settings";
+        bool shown;
+        bool locked;
+        float lastTipTime;
+        bool smoothInit;
+        Vector3 smoothPos;
+        Quaternion smoothRot;
         bool popupOpen;
         float popupUntil;
         readonly Dictionary<string, bool> dimmed = new Dictionary<string, bool>();
@@ -174,29 +188,49 @@ namespace Cobot
         {
             if (head == null || visuals.Count == 0)
                 return;
-            if (!HandJoints.TryGetPosition(menuOnLeftHand, OVRSkeleton.BoneId.XRHand_Wrist, out var wrist) ||
-                !HandJoints.TryGetPosition(menuOnLeftHand, OVRSkeleton.BoneId.XRHand_MiddleMetacarpal, out var knuckle))
+            var hasTip = HandJoints.TryGetPosition(!menuOnLeftHand, OVRSkeleton.BoneId.XRHand_IndexTip, out var tip);
+            if (hasTip)
+                lastTipTime = Time.unscaledTime;
+            if (locked)
             {
-                root.gameObject.SetActive(false);
-                return;
+                var away = !hasTip ? Time.unscaledTime - lastTipTime > 0.5f
+                    : Vector3.Distance(tip, smoothPos) > lockRadius + 0.04f;
+                if (away)
+                    locked = false;
             }
 
-            var toWrist = wrist - head.position;
-            var visible = toWrist.magnitude < maxDistance && Vector3.Dot(head.forward, toWrist.normalized) > lookThreshold;
-            root.gameObject.SetActive(visible);
-            if (!visible)
+            if (!locked)
             {
-                armed = true;
-                return;
+                if (!TryHandPose(out var target, out var targetRot, out var facing, out var close))
+                {
+                    root.gameObject.SetActive(false);
+                    shown = false;
+                    return;
+                }
+                shown = close && (shown ? facing > hideFacing : facing > showFacing);
+                if (!shown)
+                {
+                    root.gameObject.SetActive(false);
+                    armed = true;
+                    smoothInit = false;
+                    return;
+                }
+                if (!smoothInit)
+                {
+                    smoothPos = target;
+                    smoothRot = targetRot;
+                    smoothInit = true;
+                }
+                var blend = 1f - Mathf.Exp(-smoothing * Time.unscaledDeltaTime);
+                smoothPos = Vector3.Lerp(smoothPos, target, blend);
+                smoothRot = Quaternion.Slerp(smoothRot, targetRot, blend);
+                if (hasTip && Vector3.Distance(tip, smoothPos) < lockRadius)
+                    locked = true;
             }
-
-            var toHead = (head.position - wrist).normalized;
-            var along = Vector3.ProjectOnPlane(knuckle - wrist, toHead).normalized;
-            var center = wrist + toHead * offsetTowardHead;
-            var up = Vector3.ProjectOnPlane(Vector3.up, toHead);
-            if (up.sqrMagnitude < 1e-4f)
-                up = Vector3.Cross(-toHead, along);
-            root.SetPositionAndRotation(center, Quaternion.LookRotation(-toHead, up));
+            root.gameObject.SetActive(true);
+            root.SetPositionAndRotation(smoothPos, smoothRot);
+            var center = smoothPos;
+            var along = root.right;
             if (popupOpen && Time.unscaledTime > popupUntil)
                 popupOpen = false;
             var rowUp = root.up;
@@ -227,35 +261,65 @@ namespace Cobot
                 ApplyColors();
             }
 
-            if (!HandJoints.TryGetPosition(!menuOnLeftHand, OVRSkeleton.BoneId.XRHand_IndexTip, out var tip))
+            if (!hasTip)
             {
                 foreach (var v in visuals)
                     v.t.localScale = Vector3.one;
                 return;
             }
+            var inv = Quaternion.Inverse(root.rotation);
             var nearest = -1;
-            var nearestDist = float.MaxValue;
+            var nearestLateral = float.MaxValue;
+            var nearestDepth = 0f;
             for (var i = 0; i < visuals.Count; i++)
             {
                 if (!Shown(i))
                     continue;
-                var d = Vector3.Distance(tip, visuals[i].t.position);
-                if (d < nearestDist)
+                var local = inv * (tip - visuals[i].t.position);
+                var lateral = new Vector2(local.x, local.y).magnitude;
+                if (lateral < nearestLateral)
                 {
                     nearest = i;
-                    nearestDist = d;
+                    nearestLateral = lateral;
+                    nearestDepth = local.z;
                 }
             }
+            var radius = discSize * 0.5f;
+            var hovering = nearest >= 0 && nearestLateral < radius * 1.3f && nearestDepth > -hoverDepth;
             for (var i = 0; i < visuals.Count; i++)
-                visuals[i].t.localScale = Vector3.one * (i == nearest && nearestDist < hoverRadius ? 1.15f : 1f);
-            if (nearestDist > releaseRadius)
+                visuals[i].t.localScale = Vector3.one * (i == nearest && hovering ? 1.15f : 1f);
+            if (nearest < 0 || nearestLateral > radius * 1.6f || nearestDepth < -rearmDepth)
                 armed = true;
-            if (armed && nearestDist < pressRadius && Time.unscaledTime - lastPress > cooldown)
+            if (armed && hovering && nearestLateral < radius * 1.2f && nearestDepth > -pressDepth
+                && Time.unscaledTime - lastPress > cooldown)
             {
                 armed = false;
                 lastPress = Time.unscaledTime;
                 Press(nearest);
             }
+        }
+
+        bool TryHandPose(out Vector3 position, out Quaternion rotation, out float facing, out bool close)
+        {
+            position = default;
+            rotation = Quaternion.identity;
+            facing = 0f;
+            close = false;
+            if (!HandJoints.TryGetPosition(menuOnLeftHand, OVRSkeleton.BoneId.XRHand_Wrist, out var wrist) ||
+                !HandJoints.TryGetPosition(menuOnLeftHand, OVRSkeleton.BoneId.XRHand_MiddleMetacarpal, out var knuckle) ||
+                !HandJoints.TryGetPosition(menuOnLeftHand, OVRSkeleton.BoneId.XRHand_IndexMetacarpal, out var index) ||
+                !HandJoints.TryGetPosition(menuOnLeftHand, OVRSkeleton.BoneId.XRHand_LittleMetacarpal, out var little))
+                return false;
+            var fingers = (knuckle - wrist).normalized;
+            var thumbSide = Vector3.ProjectOnPlane(index - little, fingers).normalized;
+            var back = Vector3.Cross(thumbSide, fingers) * (menuOnLeftHand ? -1f : 1f);
+            var toHead = head.position - wrist;
+            facing = Vector3.Dot(back, toHead.normalized);
+            close = toHead.magnitude < maxDistance;
+            var tilt = Vector3.Slerp(back, toHead.normalized, faceHeadBlend).normalized;
+            position = wrist + back * offsetAboveHand + fingers * offsetAlongHand;
+            rotation = Quaternion.LookRotation(-tilt, thumbSide);
+            return true;
         }
 
         void Press(int index)
