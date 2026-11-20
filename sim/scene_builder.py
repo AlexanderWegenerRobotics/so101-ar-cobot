@@ -124,12 +124,24 @@ class SceneBuilder:
         self.spec.add_material(name="floor_mat", textures=["", "floor_tex"], texuniform=True,
                                texrepeat=[5, 5], reflectance=0.2)
         self.spec.add_material(name="table_mat", rgba=[0.82, 0.78, 0.72, 1])
+        self.spec.add_material(name="table_leg_mat", rgba=[0.35, 0.35, 0.37, 1])
         self.world.add_light(pos=[0, 0, 3], dir=[0, 0, -1], type=mujoco.mjtLightType.mjLIGHT_DIRECTIONAL)
         self.world.add_geom(name="floor", type=mujoco.mjtGeom.mjGEOM_PLANE, size=[0, 0, 0.05],
                             pos=[0, 0, -t["height"]], material="floor_mat")
-        self.world.add_geom(name="table", type=mujoco.mjtGeom.mjGEOM_BOX,
-                            size=[t["size"][0] / 2, t["size"][1] / 2, t["height"] / 2],
-                            pos=[t["center"][0], t["center"][1], -t["height"] / 2], material="table_mat")
+        sx, sy = t["size"][0] / 2, t["size"][1] / 2
+        cx, cy = t["center"]
+        top = t.get("thickness", 0.03)
+        leg = t.get("leg", 0.05)
+        inset = t.get("leg_inset", 0.05)
+        self.world.add_geom(name="table", type=mujoco.mjtGeom.mjGEOM_BOX, size=[sx, sy, top / 2],
+                            pos=[cx, cy, -top / 2], material="table_mat")
+        leg_half = (t["height"] - top) / 2
+        for i, (dx, dy) in enumerate([(1, 1), (1, -1), (-1, 1), (-1, -1)]):
+            self.world.add_geom(name=f"table_leg_{i}", type=mujoco.mjtGeom.mjGEOM_BOX,
+                                size=[leg / 2, leg / 2, leg_half],
+                                pos=[cx + dx * (sx - inset - leg / 2), cy + dy * (sy - inset - leg / 2),
+                                     -top - leg_half],
+                                material="table_leg_mat")
 
     def _add_camera(self):
         c = self.cfg["camera"]
@@ -217,10 +229,11 @@ class SceneBuilder:
                 "tag_offset": [0.0, 0.0, w + 2 * STICKER_HALF_THICKNESS],
             })
 
-    def _sample_position(self, radius, placed, total):
+    def _sample_position(self, radius, placed, total, region=None):
         s = self.cfg["cubes"]["spawn"]
-        r_min, r_max = s["radius"]
-        a_min, a_max = np.radians(s["angle_deg"])
+        region = region or s
+        r_min, r_max = region["radius"]
+        a_min, a_max = np.radians(region["angle_deg"])
         for _ in range(s["max_tries"]):
             r = math.sqrt(self.rng.uniform(r_min ** 2, r_max ** 2))
             a = self.rng.uniform(a_min, a_max)
@@ -238,6 +251,8 @@ class SceneBuilder:
         self.rng.shuffle(types)
         self.rng.shuffle(colors)
         order = sorted(range(len(types)), key=lambda i: -c["types"][types[i]]["size"])
+        far = c["spawn"].get("far") or {}
+        far_ids = set([i for i in range(len(types)) if types[i] == "standard"][:far.get("count", 0)])
         face_fraction = self.cfg["tags"]["face_fraction"]
         self.manifest["cubes"] = [None] * len(types)
         for i in order:
@@ -247,7 +262,7 @@ class SceneBuilder:
             tag_id = c["first_tag_id"] + i
             name = f"cube_{tag_id}"
             radius = size / 2 * math.sqrt(2)
-            xy = self._sample_position(radius, len(self.cube_body_order), len(types))
+            xy = self._sample_position(radius, len(self.cube_body_order), len(types), far if i in far_ids else None)
             yaw = self.rng.uniform(-math.pi, math.pi) if c["spawn"]["random_yaw"] else 0.0
             self.footprints.append((xy, radius))
             self.cube_body_order.append(i)

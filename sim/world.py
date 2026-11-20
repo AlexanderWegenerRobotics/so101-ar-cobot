@@ -23,6 +23,7 @@ class SimWorld:
         self._thread = None
         self._running = False
         self._renderers = {}
+        self._grasps = {}
 
     @property
     def is_running(self):
@@ -51,6 +52,7 @@ class SimWorld:
     def step(self, n=1):
         with self.lock:
             for _ in range(n):
+                self._apply_grasps()
                 mujoco.mj_step(self.model, self.data)
 
     def advance(self, seconds):
@@ -62,6 +64,7 @@ class SimWorld:
         last_sync = 0.0
         while self._running:
             with self.lock:
+                self._apply_grasps()
                 mujoco.mj_step(self.model, self.data)
                 if self._viewer is not None and next_t - last_sync > 1 / 60:
                     self._viewer.sync()
@@ -75,6 +78,7 @@ class SimWorld:
 
     def reset(self):
         with self.lock:
+            self._grasps.clear()
             mujoco.mj_resetDataKeyframe(self.model, self.data, self.model.key("home").id)
             mujoco.mj_forward(self.model, self.data)
 
@@ -124,6 +128,44 @@ class SimWorld:
             for i, joint in enumerate(hands["joints"]):
                 mocap = self.model.body_mocapid[self.model.body(f"hand_{side}_{joint}").id]
                 self.data.mocap_pos[mocap] = hands["park"] if joints_base is None else T * joints_base[i]
+
+    def grasp(self, side, body_name, target_base):
+        body = self.model.body(body_name)
+        joint = body.jntadr[0]
+        with self.lock:
+            self._grasps[side] = {
+                "body": body_name,
+                "qpos": int(self.model.jnt_qposadr[joint]),
+                "dof": int(self.model.jnt_dofadr[joint]),
+                "target": self.base_from_mujoco().inverse() * target_base,
+            }
+
+    def move_grasp(self, side, target_base):
+        with self.lock:
+            g = self._grasps.get(side)
+            if g is not None:
+                g["target"] = self.base_from_mujoco().inverse() * target_base
+
+    def release(self, side, velocity_base=None):
+        with self.lock:
+            g = self._grasps.pop(side, None)
+            if g is None:
+                return None
+            if velocity_base is not None:
+                R = self.base_from_mujoco().inverse().rotation
+                self.data.qvel[g["dof"]:g["dof"] + 3] = R @ np.asarray(velocity_base, float)
+            return g["body"]
+
+    def held(self, side):
+        g = self._grasps.get(side)
+        return g["body"] if g else None
+
+    def _apply_grasps(self):
+        for g in self._grasps.values():
+            a, d, T = g["qpos"], g["dof"], g["target"]
+            self.data.qpos[a:a + 3] = T.pos
+            self.data.qpos[a + 3:a + 7] = T.quat
+            self.data.qvel[d:d + 6] = 0.0
 
     def object_poses(self):
         names = [c["name"] for c in self.manifest["cubes"]] + [b["name"] for b in self.manifest["bins"]]

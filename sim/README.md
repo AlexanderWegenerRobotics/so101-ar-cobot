@@ -87,7 +87,27 @@ The Quest can show the sim instead of passthrough, so the same calibration, over
 
 ```
 python -m sim.scene_export        once, and after model changes, then rebuild the Quest app
-cobot-launch vr                   sim + objects + sim hand from the Quest + scene stream
+cobot-launch vr                   sim + objects + sim hand from the Quest + scene stream + Quest bridge
 ```
 
 The hand spheres collide (`hands.collide` in `scene.yaml`), so pushing cubes works. Grasping a cube with your own hand through contacts alone is not stable in MuJoCo; if needed, that would be a weld on pinch on the sim side.
+
+## Sim human (`sim.hand:SimHand`, `source: agent`)
+
+Stand-in for the operator in the dev profiles: follows the human part of `task/state` (next cube -> its bin), with
+probability `deviate` (default 0.2) takes another open cube instead, to exercise replanning. Moves at about
+0.45 m/s with min-jerk segments and grasps through the same pinch `Grasper` as the Quest hands, so the task node
+sees exactly what it would see from a real person (`hand` messages and lifted cubes). Resets itself when the sim
+is reset. Other sources: `off` (no hand), `scripted` (reaches over every cube in turn, for supervisor tests), `bus`
+(hands from the Quest).
+
+## Out-of-reach cubes
+
+`cubes.spawn.far` in `config/scene.yaml` places `count` standard cubes at 0.42 to 0.47 m from the base, outside
+the arm's grasp zone but on the table, so the scene always has both human-only reasons (too heavy, out of reach).
+
+## Reset (`sim.control:SimControl`)
+
+Handles `reset_world` on `operator/command`: cubes, hands and arm back to the start keyframe. The task node sends
+it only after driving the arm home, so the arm does not jump. Use `Reset` on the wrist (`reset_scene`), not
+`reset_world` directly.

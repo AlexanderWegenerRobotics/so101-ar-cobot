@@ -11,7 +11,7 @@ import numpy as np
 from interfaces.transforms import Pose
 
 ROOT = Path(__file__).resolve().parents[1]
-UNITY_DIR = ROOT / "quest_app" / "QuestTeleop" / "Assets" / "Resources" / "SimScene"
+UNITY_DIR = ROOT / "quest_app" / "CobotQuest" / "Assets" / "Resources" / "SimScene"
 VISUAL_GROUPS = (0, 1, 2)
 SKIP_GEOMS = {"floor"}
 GEOM_TYPES = {int(k): v for k, v in {
@@ -211,10 +211,9 @@ def simplify(verts, faces, max_faces):
     return v, f
 
 
-def write_obj(path, verts, faces):
-    lines = [f"v {x:.6f} {y:.6f} {z:.6f}" for x, y, z in verts]
-    lines += [f"f {a + 1} {b + 1} {c + 1}" for a, b, c in faces]
-    path.write_text("\n".join(lines) + "\n")
+def write_mesh(path, verts, faces):
+    header = np.array([len(verts), len(faces)], dtype="<i4")
+    path.write_bytes(header.tobytes() + np.asarray(verts, "<f4").tobytes() + np.asarray(faces, "<i4").tobytes())
 
 
 def export(world, out_dir=UNITY_DIR, max_faces=4000):
@@ -227,7 +226,7 @@ def export(world, out_dir=UNITY_DIR, max_faces=4000):
     for name in meshes:
         v, f = simplify(*mesh_arrays(model, model.mesh(name).id), max_faces)
         faces_total += len(f)
-        write_obj(out_dir / "Meshes" / f"{name}.obj", v, f)
+        write_mesh(out_dir / "Meshes" / f"{name}.bytes", v, f)
     (out_dir / "asset_version.txt").write_text(info["asset_version"] + "\n")
     return info, len(meshes), faces_total
 
