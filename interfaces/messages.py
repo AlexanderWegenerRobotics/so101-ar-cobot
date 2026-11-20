@@ -27,6 +27,7 @@ class Topic:
     ARM_STATUS = "arm/status"
     ARM_STATE = "arm/state"
     ARM_PLAN = "arm/plan"
+    ARM_WORKSPACE = "arm/workspace"
     SAFETY = "safety"
     TASK_STATE = "task/state"
     OPERATOR_COMMAND = "operator/command"
@@ -122,6 +123,12 @@ class ObjectTask:
     target_bin: int | None = None
     status: str = "pending"
     reason: str = ""
+    order: int = 0
+    robot_ok: bool = True
+    robot_reason: str = ""
+    locked: str | None = None
+    est_start: float = 0.0
+    est_end: float = 0.0
 
 
 @dataclass
@@ -129,6 +136,12 @@ class TaskState:
     mode: str
     objects: list
     active_tag_id: int | None = None
+    human_next_tag_id: int | None = None
+    robot_step: str = ""
+    plan: dict = field(default_factory=dict)
+    message: str = ""
+    human_route: list = field(default_factory=list)
+    trial: int = 0
     stamp: float = field(default_factory=now)
 
 
@@ -138,6 +151,8 @@ class OperatorCommand:
     mode: str | None = None
     tag_id: int | None = None
     bin_tag_id: int | None = None
+    owner: str | None = None
+    value: float | None = None
     stamp: float = field(default_factory=now)
 
 
@@ -146,6 +161,17 @@ class TeleopTarget:
     target: ToolTarget
     gripper: float | None = None
     active: bool = True
+    stamp: float = field(default_factory=now)
+
+
+@dataclass
+class WorkspaceMap:
+    version: str
+    bounds: list
+    z: float
+    zones: list
+    image: str
+    frame: str = "base"
     stamp: float = field(default_factory=now)
 
 
@@ -171,7 +197,7 @@ class ScenePoses:
 MESSAGE_TYPES = {cls.__name__: cls for cls in [
     ToolTarget, ArmGoal, GoalStatus, ArmState, ArmPlan, SafetyState, HandState,
     ObjectArray, ObjectTask, TaskState, OperatorCommand, TeleopTarget, ObjectState, Pose,
-    SceneInfo, ScenePoses,
+    SceneInfo, ScenePoses, WorkspaceMap,
 ]}
 
 

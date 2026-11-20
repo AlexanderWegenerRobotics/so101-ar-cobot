@@ -44,7 +44,7 @@ Object properties like color, mass or "too heavy" are not part of `ObjectState`.
 
 ## Message bus
 
-All modules talk only through messages on a ZeroMQ bus, never by calling each other. Python nodes run as threads in one process (`launch.py`) because in sim they share one MuJoCo world. Unity connects to the same bus over the network (NetMQ).
+All modules talk only through messages on a ZeroMQ bus, never by calling each other. Python nodes run as threads in one process (`launch.py`) because in sim they share one MuJoCo world. Unity connects through the Quest bridge (`interfaces/quest_bridge.py`, TCP port 5560, one `{"topic": ..., "msg": ...}` JSON object per line). It forwards `objects`, `arm/state`, `arm/plan`, `safety`, `task/state` and `sim/*` to the Quest and accepts `hand`, `operator/command` and `operator/teleop` from it. It sends the latest `sim/scene_info` right after the Quest connects.
 
 - Broker: publishers connect to port 5555, subscribers to port 5556 (`config/bus.yaml`). The launcher starts it.
 - Wire format: ZeroMQ multipart `[topic, json]`. The JSON has a `type` field with the message class name. Field names are the same as in `interfaces/messages.py`.
@@ -84,6 +84,7 @@ controls ──arm/state, arm/plan──▶ everyone        task ──task/stat
 | `arm/status` | `GoalStatus` | controls → task, supervisor | on change |
 | `arm/state` | `ArmState` | controls → all | 30 Hz |
 | `arm/plan` | `ArmPlan` | controls → Unity | once per goal |
+| `arm/workspace` | `WorkspaceMap` | `hardware.workspace` → Unity | 1 Hz, same message every time |
 | `safety` | `SafetyState` | supervisor → controls, Unity | 30 Hz |
 | `task/state` | `TaskState` | task → Unity | 5 Hz and on change |
 | `operator/command` | `OperatorCommand` | Quest app → task | on event |
@@ -102,12 +103,17 @@ controls ──arm/state, arm/plan──▶ everyone        task ──task/stat
 | `pose` | Move to `target`, controls plans the path (minimum jerk) | `target`, `gripper` |
 | `stream` | Follow `target` directly, no planning (teleop) | `target`, `gripper`, sent at 30 Hz |
 | `joints` | Move to joint angles | `joints`, `gripper` |
+| `gripper` | Only move the gripper | `gripper` |
 | `home` | Go to the home pose | |
 | `stop` | Stop now and hold position | |
+
+How controls plans and executes these: `controls/README.md`.
 
 **`GoalStatus`**: `goal_id`, `status` = `accepted`, `running`, `succeeded`, `failed`, `rejected`, `preempted`, plus `reason` (for example `unreachable`, `too_heavy`, `safety_stop`).
 
 **`ArmState`**: `joints` (dict, degrees, gripper 0 to 100), `status` (`idle`, `moving`, `holding`, `stopped`), `goal_id`, `tool` (current `ToolTarget` from forward kinematics), `speed_scale` (what controls is applying right now).
+
+**`WorkspaceMap`**: what the arm can reach, as a top view image over the table. `bounds` (x0, x1, y0, y1 in base, meters), `z` (overlay height), `image` (base64 RGBA PNG, u along +x, v along +y), `zones` (legend: `name`, `label`, `rgba`, `min_reach`, `max_reach` from the pan axis, `area_m2`). Computed from the arm model by `python -m hardware.workspace` (sampled joint space, self collision and table checked) and cached in `config/workspace.json`, so it is the same in sim and on the real robot. Zones: `reach` = the gripper can get within 10 cm above the table with any orientation, `grasp` = it can come straight down (within 20 degrees) to cube height.
 
 **`ArmPlan`**: `goal_id`, `waypoints` (list of tool positions). For the AR path overlay.
 
@@ -117,9 +123,9 @@ controls ──arm/state, arm/plan──▶ everyone        task ──task/stat
 
 **`ObjectArray`**: `objects` (list of `ObjectState`), `source`.
 
-**`TaskState`**: `mode` (`auto`, `teleop`, `paused`), `active_tag_id`, `objects` = list of `ObjectTask` with `tag_id`, `owner` (`robot` or `human`), `target_bin`, `status` (`pending`, `active`, `done`, `failed`), `reason`.
+**`TaskState`**: `mode` (`auto`, `paused`, `teleop`, `resetting`), `trial`, `human_route` (suggested hand path to the next cube and its bin, list of [x, y] on the table), `active_tag_id` (robot's cube), `human_next_tag_id`, `robot_step`, `message`, `plan` (`makespan`, `human_time`, `robot_time`, `interference`, `alpha`, `human_cap`, `solve_ms`), `objects` = list of `ObjectTask` with `tag_id`, `owner` (`robot`, `human`, empty when done), `target_bin`, `status` (`pending`, `robot_active`, `human_active`, `done`), `reason` (why this owner: `planner`, `operator`, `too_heavy`, `out_of_reach`, `tilted`, `robot_failed`, `in progress`), `order` (0 = next for that agent), `robot_ok`, `robot_reason`, `locked` (operator: `robot` / `human`), `est_start`, `est_end` (seconds from now). Details: `task/README.md`.
 
-**`OperatorCommand`**: `kind` = `set_mode` (uses `mode`), `select_object` (pointing gesture: `tag_id`, optional `bin_tag_id`), `cancel`.
+**`OperatorCommand`**: `kind` = `start`, `pause`, `set_mode` (uses `mode`), `assign` (`tag_id`, `owner` = `robot` / `human` / null to clear), `select_object` (pointing: `tag_id`, robot does it next), `cancel` (clear operator locks), `set_alpha` (`value` 0..1: 0 fastest, 1 least human work), `replan`, `reset_scene` (next trial: the task node drives the arm home, then sends `reset_world`, which `sim.control:SimControl` handles by putting the cubes back; on the real robot you put the cubes back yourself).
 
 **`TeleopTarget`**: `target` (`ToolTarget`), `gripper`, `active`. The task node turns it into `stream` goals while in teleop mode.
 
@@ -144,14 +150,14 @@ Whether `objects` itself comes from ground truth or from AprilTag detection is s
 
 **`ScenePoses`**: `version` (same as `SceneInfo.version`, rebuild when it changes), `names`, `poses` (one `[x, y, z, qw, qx, qy, qz]` per name, base frame), `sim_time`. Only dynamic bodies are listed.
 
-**Assets**: `python -m sim.scene_export` writes the meshes as OBJ (decimated to about 4000 faces each) into `quest_app/QuestTeleop/Assets/Resources/SimScene/Meshes/`. Vertices are in the geom frame with base axes. Rerun it when the model changes and rebuild the Quest app.
+**Assets**: `python -m sim.scene_export` writes the meshes (decimated to about 4000 faces each) into `quest_app/CobotQuest/Assets/Resources/SimScene/Meshes/<name>.bytes`: int32 vertex count, int32 face count, float32 vertices (x, y, z in the geom frame, base axes), int32 faces, little endian. Rerun it when the model changes and rebuild the Quest app.
 
 **Conversion to Unity** (the one place it happens, in the WorldRenderer):
 
 - Position: `unity = (-y, z, x)`
 - Quaternion (w, x, y, z) → Unity `Quaternion(y, -z, -x, w)`
 - Box size (hx, hy, hz) → `localScale = (2hy, 2hz, 2hx)` on a Unity cube. Cylinder and capsule axis is z in MuJoCo and y in Unity, so `localScale = (2r, h, 2r)` with h the half length.
-- Meshes: Unity's OBJ importer mirrors x, so the mesh child gets the fixed `localRotation = Quaternion(-0.5, 0.5, 0.5, 0.5)`. If the arm looks mirrored in the headset, this is the first thing to check.
+- Mesh vertices go through the same position rule. The mirror flips the winding, so each triangle (a, b, c) becomes (a, c, b).
 - Textures sit on the geom +z face (Unity +y), image up = geom +y, image right = geom +x.
 
 ## Safety rules
