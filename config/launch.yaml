@@ -55,3 +55,8 @@ profiles:
         params: {rate_hz: 60}
       - node: sim.control:SimControl
       - node: interfaces.quest_bridge:QuestBridge
+
+  measure:
+    sim: {viewer: false}
+    nodes:
+      - node: controls.node:ArmController
