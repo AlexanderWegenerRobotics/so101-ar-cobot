@@ -34,8 +34,9 @@ the human's time, the sim human walks it, and the headset draws the suggested pa
 **Interference.** For a robot job and a human job, `conflict` in [0, 1] is the expected slowdown the safety
 supervisor would impose while both run: its speed ramp (1 at 25 cm, 0 at 10 cm) applied to the distance between
 the human's detoured hand path and the robot's sweep (tool path cube -> bin plus points along the arm back to the
-base), averaged along the hand path. Running both at the same time costs `w_interference (3) x conflict x overlap`
-seconds.
+base), averaged along the hand path. Running both at the same time costs `w_interference (1) x conflict x overlap`
+seconds: each predicted second of slowed arm counts as one second of time, so `FAST` (alpha 0) is the plan that
+really finishes first. A higher weight biases the plan toward keeping you away from the arm at the cost of time.
 
 **Waiting.** Besides picking a cube, the human may wait until the robot finishes its current cube (only offered when
 every cube the human could take next conflicts with it). The headset then shows `you: NEXT in 6 s`.
@@ -75,7 +76,7 @@ job stays locked; if the human grabs the cube the robot is reaching for, the rob
 paused: `trial N ready, press Go`. A trial runs from Go until all cubes are sorted. Each trial is one row in
 `logs/trials.csv`:
 
-`date, trial, completed, alpha, duration_s, planned_makespan_s, robot_cubes, human_cubes, human_deviations
+`date, trial, completed, layout (seed or default), alpha, duration_s, planned_makespan_s, robot_cubes, human_cubes, human_deviations
 (took another cube than suggested), operator_assignments, robot_failures, min_hand_arm_m, slow_s, stop_s, stops`
 
 Safety numbers (minimum hand-arm distance, time in the slow and stop zones, number of stops) only count while the
@@ -106,17 +107,18 @@ fails as `blocked` (arm hit something, see controls) does not count as an attemp
 | `start`, `pause` | | auto mode on / off (pause stops the arm, resume restarts the current step) |
 | `set_mode` | `mode` | `auto`, `paused`, `teleop` (forwards `operator/teleop` as stream goals) |
 | `assign` | `tag_id`, `owner` | lock a cube to `robot` or `human` (null clears), whole plan is recomputed |
-| `select_object` | `tag_id` | robot does this cube next: locked to the robot and forced as its next pick in the DP (whenever the robot is free and this cube is open, it is the only job the robot may take), the rest of the plan is optimized around it. If the robot is only reaching for another cube it switches now; if it holds one it places that first. Only one cube can be "next" |
+| `select_object` | `tag_id` | robot does this cube next: it becomes the starting point of a new plan (the robot's first pick in the DP: whenever the robot is free and this cube is open, it is the only job the robot may take). It is not locked, so everything else is planned from scratch with the normal rules and the human budget of the current mix: cubes the robot had before can move to you. If the robot is only reaching for another cube it switches now; if it holds one it places that first. Only one cube can be "next" |
 | `cancel` | | clear all operator locks |
 | `set_alpha` | `value` | move along the trade-off, whole plan is recomputed |
 | `replan` | | replan now |
-| `reset_scene` | | next trial: arm home (smooth), then cubes reset (sim), then paused until Go |
+| `reset_scene` | `mode` | next trial: arm home (smooth), then cubes reset (sim), then paused until Go. `mode: new_layout` draws a new random layout (seed 1 to 9999), anything else keeps the current one, so trials can be repeated on the same layout |
 
 Assigning a human-only cube to the robot is refused with the reason in `message`.
 
 ## Parameters (`config/launch.yaml`)
 
-`autostart` (false for the headset profiles), `alpha` 0.5, `w_interference` 3.0, `speed` 0.12, `approach` 0.06,
+`autostart` (false for the headset profiles), `alpha` 0.5, `w_interference` 1.0, `speed` 0.25 (tool m/s; the
+robot time model scales with it), `approach` 0.06,
 `drop_z` 0.09, `bin_slot` 0.025, `max_failures` 3, `max_tilt_deg` 15, `gripper_empty` 6, `lost_distance` 0.05,
 `moved_threshold` 0.02, `human_rest` [0.55, 0, 0.12] (where the human is assumed when no hand is tracked).
 

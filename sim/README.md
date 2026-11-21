@@ -108,6 +108,9 @@ the arm's grasp zone but on the table, so the scene always has both human-only r
 
 ## Reset (`sim.control:SimControl`)
 
-Handles `reset_world` on `operator/command`: cubes, hands and arm back to the start keyframe. The task node sends
+Handles `reset_world` on `operator/command`: cubes, hands and arm back to the start keyframe. With `value` = a seed,
+the cubes get a new random layout drawn with the same rules as the scene build (`sim.scene_builder.sample_layout`:
+spawn ring, the out-of-reach cubes in the far ring, spacing, base plate and bins kept clear); the same seed always
+gives the same layout. The task node sends
 it only after driving the arm home, so the arm does not jump. Use `Reset` on the wrist (`reset_scene`), not
 `reset_world` directly.

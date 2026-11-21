@@ -24,12 +24,14 @@ namespace Cobot.EditorTools
             var renderer = GetOrAdd<WorldRenderer>(anchorGo);
             var workspace = GetOrAdd<WorkspaceOverlay>(anchorGo);
             var tasks = GetOrAdd<TaskOverlay>(anchorGo);
+            var mission = GetOrAdd<MissionControl>(anchorGo);
 
             var cam = Camera.main;
             Set(anchor, "head", cam != null ? cam.transform : null);
             Set(renderer, "anchor", anchor);
             Set(workspace, "anchor", anchor);
             Set(tasks, "anchor", anchor);
+            Set(mission, "anchor", anchor);
             Set(renderer, "baseMaterial", AssetDatabase.LoadAssetAtPath<Material>(LitMaterial));
             Set(streamer, "anchor", anchor);
             Set(wristMenu, "baseMaterial", AssetDatabase.LoadAssetAtPath<Material>(LitMaterial));

@@ -142,6 +142,7 @@ class TaskState:
     message: str = ""
     human_route: list = field(default_factory=list)
     trial: int = 0
+    trial_stats: dict = field(default_factory=dict)
     stamp: float = field(default_factory=now)
 
 

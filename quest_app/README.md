@@ -13,8 +13,9 @@ The Quest draws the MuJoCo scene in the robot base frame and follows the sim liv
 | `WorldAnchor` | The robot base frame in the Unity scene. Everything from the sim is placed under it. For now it is put in front of you on start and with the A button (R in the editor); later the QR calibration sets it |
 | `WorldRenderer` | Builds the scene from `sim/scene_info` (meshes, boxes, tag textures) and moves the bodies with `sim/scene` |
 | `HandStreamer` | Sends both tracked hands as `hand` (26 OpenXR joints from `OVRSkeleton`, pinch, pointing ray), in the base frame |
-| `WristMenu` | Buttons 7.5 cm above the back of your left hand, tilted halfway toward your face: turn the back of your hand toward you to show them. They move with the hand, not with your head, and freeze in place as soon as your right index finger comes within 16 cm, so covering the left hand while pressing does not move them. A button triggers when your fingertip touches its surface. Buttons in the `settings` group sit in a second row that the `Settings` button opens |
-| `CobotWristActions` | What the buttons do. Main row: `Table` (place the table in front of you), `Reset` (next trial: arm home, cubes back, wait for Go), `Go/Stop` (label shows the state), `Settings`. Settings popup (closes after 6 s or after a press): `Reach` (workspace overlay on/off), `Tasks` (task overlay on/off), `Fast` / `Even` / `Robot max` (robot/human split, the selected one is bright) |
+| `WristMenu` | One button above the back of your left hand (turn the back of your hand toward you): `Table` places the table in front of you. Stays with your hand, freezes while your right finger is near. Other buttons can still be added with `AddButton` |
+| `CobotWristActions` | Wires the wrist `Table` button |
+| `MissionControl` + `UiKit` | Floating panel next to the table: trial, run state, elapsed time, progress, time left and layout, cubes done by robot and you, who-does-what selector (Fast / Even / Robot max), live safety zone with hand distance, last event, and buttons Go/Stop, Reset trial, New layout. Grab the bar above it with a pinch to move it |
 | `ButtonIcons` | Draws the round button images (colored disc, white ring, white icon) |
 | `HandJoints` | Small helper to read joint positions from Meta's hand tracking |
 | `WorkspaceOverlay` | Draws `arm/workspace` flat on the table: green = the arm can grasp there, orange = it can only reach there |
@@ -37,6 +38,24 @@ The table appears in front of you at about desk height. Press A to move it in fr
 Raise your left hand and look at it, the buttons appear next to the wrist. Touch one with the tip of your right index finger. A button fires once per touch, then you have to pull the finger back.
 
 To add a button: add an entry to `Buttons` on the `WristMenu` component (id, label, icon, color). Icons are drawn in `ButtonIcons.cs` (`table`, `reset`, `zones`, `run`, `mix`, `tasks`); leave `icon` empty and the label is written inside the circle instead. Then either wire its `On Press` event in the inspector, or handle its id in `CobotWristActions.OnPressed`. From code, `WristMenu.AddButton(id, label, color)` works too.
+
+### Mission control
+
+A panel stands next to the table on your left, at about eye height, turned toward you. It belongs to the table: if
+you place the table somewhere else, the panel moves with it. To move it, pinch the grey bar above it and drag; it
+turns to face you while you hold it and stays where you let go.
+
+- top: run state (`RUNNING`, `PAUSED`, `RESETTING`, `DONE`, `OFFLINE`), trial number, elapsed time
+- progress bar: cubes sorted, estimated time left, layout
+- `ROBOT` / `YOU`: cubes each of you sorted in this trial, and how many are still planned for each
+- `WHO DOES WHAT`: `FAST` (finish as fast as possible, you do most), `EVEN`, `ROBOT MAX` (you only do what the
+  robot can't); the selected one is lit
+- safety line: `CLEAR`, `SLOWING`, `STOPPED` with the live hand-to-arm distance and the stops in this trial
+- last event from the task node
+- `GO` / `STOP`; `RESET TRIAL`: arm home, the same cube layout again, then `GO` (repeatable trials);
+  `NEW LAYOUT`: arm home, a new random layout (its number shows under the progress bar and in `trials.csv`)
+
+Press a button by touching its surface with your index fingertip.
 
 ### Task overlay
 
@@ -61,10 +80,9 @@ fills along the bottom, and when it is full (about half a second) the assignment
 - a red cube: the card flashes `ROBOT CAN'T` and the reason.
 
 An orange line on the table shows the suggested path to your next cube and on to its bin, always around the robot
-base. The line above the robot shows the trial, how many cubes each of you has, the estimated time until done, the
-mix and the last event. If you take a different cube than suggested, the plan adapts.
+base. If you take a different cube than suggested, the plan adapts.
 
-The task node starts paused in the `quest` and `vr` profiles: press `Go` on the wrist to start. When the robot has
+The task node starts paused in the `quest` and `vr` profiles: press `GO` on the mission control panel to start. When the robot has
 no cube left in the plan it drives home and waits there.
 
 ### Meshes

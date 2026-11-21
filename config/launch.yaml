@@ -6,11 +6,12 @@ profiles:
       - node: supervisor.node:SafetySupervisor
         params: {slow_distance: 0.25, stop_distance: 0.10}
       - node: controls.node:ArmController
+        params: {gripper_speed: 300, gripper_settle: 0.25}
       - node: hardware.workspace:WorkspacePublisher
       - node: sim.hand:SimHand
         params: {source: agent, side: right, agent: {deviate: 0.2}}   # sim human doing its part of the plan; "off": no hand, scripted: reaches over the cubes (supervisor tests)
       - node: task.node:TaskManager
-        params: {autostart: true, alpha: 0.5}
+        params: {autostart: true, alpha: 0.5, speed: 0.25}
 
   dev_viewer:
     sim: {viewer: true}
@@ -19,11 +20,12 @@ profiles:
       - node: supervisor.node:SafetySupervisor
         params: {slow_distance: 0.25, stop_distance: 0.10}
       - node: controls.node:ArmController
+        params: {gripper_speed: 300, gripper_settle: 0.25}
       - node: hardware.workspace:WorkspacePublisher
       - node: sim.hand:SimHand
         params: {source: agent, side: right, agent: {deviate: 0.2}}   # sim human doing its part of the plan; "off": no hand, scripted: reaches over the cubes (supervisor tests)
       - node: task.node:TaskManager
-        params: {autostart: true, alpha: 0.5}
+        params: {autostart: true, alpha: 0.5, speed: 0.25}
 
   quest:
     sim: {viewer: true}
@@ -32,11 +34,12 @@ profiles:
       - node: supervisor.node:SafetySupervisor
         params: {slow_distance: 0.25, stop_distance: 0.10}
       - node: controls.node:ArmController
+        params: {gripper_speed: 300, gripper_settle: 0.25}
       - node: hardware.workspace:WorkspacePublisher
       - node: sim.hand:SimHand
         params: {source: bus}
       - node: task.node:TaskManager
-        params: {autostart: false, alpha: 0.5}   # waits for Go on the wrist menu
+        params: {autostart: false, alpha: 0.5, speed: 0.25}   # waits for Go on the wrist menu
       - node: interfaces.quest_bridge:QuestBridge
 
   vr:
@@ -46,11 +49,12 @@ profiles:
       - node: supervisor.node:SafetySupervisor
         params: {slow_distance: 0.25, stop_distance: 0.10}
       - node: controls.node:ArmController
+        params: {gripper_speed: 300, gripper_settle: 0.25}
       - node: hardware.workspace:WorkspacePublisher
       - node: sim.hand:SimHand
         params: {source: bus}
       - node: task.node:TaskManager
-        params: {autostart: false, alpha: 0.5}   # waits for Go on the wrist menu
+        params: {autostart: false, alpha: 0.5, speed: 0.25}   # waits for Go on the wrist menu
       - node: sim.scene_stream:SceneStreamer
         params: {rate_hz: 60}
       - node: sim.control:SimControl

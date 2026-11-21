@@ -24,6 +24,7 @@ class PlannerConfig:
     min_z: float = 0.0
     sample_step: float = 0.004
     joint_speed: float = 1.5
+    joint_speed_max: float = 3.0
     min_segment_time: float = 0.25
     cartesian_min_radius: float = 0.09
     direct_distance: float = 0.03
@@ -59,7 +60,7 @@ class Planner:
         a short hop does not get a very short, snappy duration."""
         dq = float(np.max(np.sum(np.abs(np.diff(q, axis=0)), axis=0))) if len(q) > 1 else 0.0
         k = v / 0.10
-        joint_v = self.cfg.joint_speed * k
+        joint_v = min(self.cfg.joint_speed * k, self.cfg.joint_speed_max)
         tool_v = 2.5 * v if joint_move else v
         return max(min_jerk_duration(length, tool_v), min_jerk_duration(dq, joint_v),
                    min_jerk_accel_duration(length, self.cfg.tool_acc * k),
@@ -95,7 +96,7 @@ class Planner:
         k = v / 0.10
         dp = np.linalg.norm(np.diff(pts, axis=0), axis=1)
         dq = np.max(np.abs(np.diff(q, axis=0)), axis=1)
-        cost = np.maximum(dp / (v * tool_factor), dq / (self.cfg.joint_speed * k)) + 1e-9
+        cost = np.maximum(dp / (v * tool_factor), dq / min(self.cfg.joint_speed * k, self.cfg.joint_speed_max)) + 1e-9
         knots = np.concatenate([[0.0], np.cumsum(cost)])
         length = float(dp.sum())
         joint_len = float(np.max(np.sum(np.abs(np.diff(q, axis=0)), axis=0)))

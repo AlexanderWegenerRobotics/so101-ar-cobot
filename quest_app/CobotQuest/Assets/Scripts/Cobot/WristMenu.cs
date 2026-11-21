@@ -98,6 +98,12 @@ namespace Cobot
             Build();
         }
 
+        public void RemoveButton(string id)
+        {
+            if (buttons.RemoveAll(b => b.id == id) > 0)
+                Build();
+        }
+
         public void SetDim(string id, bool dim)
         {
             if (dimmed.TryGetValue(id, out var d) && d == dim)
@@ -318,7 +324,7 @@ namespace Cobot
             close = toHead.magnitude < maxDistance;
             var tilt = Vector3.Slerp(back, toHead.normalized, faceHeadBlend).normalized;
             position = wrist + back * offsetAboveHand + fingers * offsetAlongHand;
-            rotation = Quaternion.LookRotation(-tilt, thumbSide);
+            rotation = Quaternion.LookRotation(-tilt, -thumbSide);
             return true;
         }
 

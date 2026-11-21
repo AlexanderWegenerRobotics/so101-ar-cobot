@@ -63,7 +63,7 @@ class Agent:
 @dataclass
 class AllocatorConfig:
     alpha: float = 0.5
-    w_interference: float = 3.0
+    w_interference: float = 1.0
     w_tie: float = 0.05
     robot_speed: float = 0.12
     robot_pick_time: float = 1.8

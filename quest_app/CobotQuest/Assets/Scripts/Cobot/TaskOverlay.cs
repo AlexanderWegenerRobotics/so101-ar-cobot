@@ -14,6 +14,7 @@ namespace Cobot
         [SerializeField] float pokeDwell = 0.45f;
         [SerializeField] float pokeCooldown = 1.5f;
         [SerializeField] Vector3 summaryPosition = new Vector3(0.05f, 0f, 0.42f);
+        [SerializeField] bool showSummary;
 
         static readonly Color RobotColor = new Color(0.25f, 0.65f, 1f);
         static readonly Color HumanColor = new Color(1f, 0.62f, 0.15f);
@@ -70,8 +71,11 @@ namespace Cobot
                 head = Camera.main.transform;
             lineMaterial = new Material(Shader.Find("Sprites/Default"));
             font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            summary = MakeText("TaskSummary", anchor.transform, 0.0022f, 70);
-            summary.transform.localPosition = BaseFrame.ToUnity(summaryPosition.x, summaryPosition.y, summaryPosition.z);
+            if (showSummary)
+            {
+                summary = MakeText("TaskSummary", anchor.transform, 0.0022f, 70);
+                summary.transform.localPosition = BaseFrame.ToUnity(summaryPosition.x, summaryPosition.y, summaryPosition.z);
+            }
             var routeGo = new GameObject("HumanRoute");
             routeGo.transform.SetParent(anchor.transform, false);
             route = routeGo.AddComponent<LineRenderer>();
@@ -229,7 +233,7 @@ namespace Cobot
                 else if (owner == "robot")
                 {
                     color = RobotColor;
-                    var next = locked && order == 0;
+                    var next = order == 0 && (string)m.task["reason"] == "operator";
                     title = next ? "ROBOT · NEXT" : $"ROBOT · {order + 1}";
                     sub = next ? "hold: take it yourself" : "hold: robot does it next";
                 }
@@ -321,8 +325,7 @@ namespace Cobot
                 lastPoke = Time.time;
                 return;
             }
-            var robotNext = owner == "robot" && (int)m.task["order"] == 0 &&
-                            m.task["locked"]?.Type == JTokenType.String && (string)m.task["locked"] == "robot";
+            var robotNext = owner == "robot" && (int)m.task["order"] == 0 && (string)m.task["reason"] == "operator";
             var msg = new JObject
             {
                 ["type"] = "OperatorCommand",

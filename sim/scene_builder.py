@@ -253,6 +253,7 @@ class SceneBuilder:
         order = sorted(range(len(types)), key=lambda i: -c["types"][types[i]]["size"])
         far = c["spawn"].get("far") or {}
         far_ids = set([i for i in range(len(types)) if types[i] == "standard"][:far.get("count", 0)])
+        self.manifest["static_footprints"] = [[float(p[0]), float(p[1]), float(r)] for p, r in self.footprints]
         face_fraction = self.cfg["tags"]["face_fraction"]
         self.manifest["cubes"] = [None] * len(types)
         for i in order:
@@ -277,8 +278,34 @@ class SceneBuilder:
                 "name": name, "tag_id": tag_id, "type": ctype, "color": color, "size": size,
                 "mass": mass, "tag_size": black_edge(self.family, size * face_fraction),
                 "tag_offset": [0.0, 0.0, size / 2 + 2 * STICKER_HALF_THICKNESS],
-                "init_pos": [float(xy[0]), float(xy[1]), size / 2], "init_yaw": float(yaw),
+                "init_pos": [float(xy[0]), float(xy[1]), size / 2], "init_yaw": float(yaw), "far": i in far_ids,
             }
+
+
+def sample_layout(cfg, manifest, seed):
+    """New random cube positions with the same rules as the scene build (spawn ring, out-of-reach cubes in the far
+    ring, spacing, base plate and bins kept clear). Returns {cube name: (x, y, yaw)}."""
+    rng = np.random.default_rng(seed)
+    spawn = cfg["cubes"]["spawn"]
+    footprints = [(np.array(f[:2]), f[2]) for f in manifest["static_footprints"]]
+    out = {}
+    for cube in sorted(manifest["cubes"], key=lambda c: -c["size"]):
+        region = (spawn.get("far") or spawn) if cube.get("far") else spawn
+        r_min, r_max = region["radius"]
+        a_min, a_max = np.radians(region["angle_deg"])
+        radius = cube["size"] / 2 * math.sqrt(2)
+        for _ in range(spawn["max_tries"]):
+            r = math.sqrt(rng.uniform(r_min ** 2, r_max ** 2))
+            a = rng.uniform(a_min, a_max)
+            p = np.array([r * math.cos(a), r * math.sin(a)])
+            if all(np.linalg.norm(p - q) >= radius + rq + spawn["min_gap"] for q, rq in footprints):
+                break
+        else:
+            raise RuntimeError(f"layout {seed}: no room for {cube['name']}")
+        yaw = rng.uniform(-math.pi, math.pi) if spawn["random_yaw"] else 0.0
+        footprints.append((p, radius))
+        out[cube["name"]] = (float(p[0]), float(p[1]), float(yaw))
+    return out
 
 
 def build(cfg=None, robot_cfg=None):

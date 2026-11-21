@@ -93,11 +93,14 @@ class TaskManager(Node):
         self.planner = Planner(self.kin)
         self.home_q = np.array(cfg["home_qpos"][:5], float)
         self.pan_axis = self.kin.pan_axis[:2].copy()
-        self.allocator = Allocator(AllocatorConfig(alpha=p.get("alpha", 0.5),
-                                                   w_interference=p.get("w_interference", 3.0),
-                                                   robot_pan_axis=tuple(self.pan_axis)))
-        self.speed = p.get("speed", 0.12)
+        self.speed = p.get("speed", 0.25)
         self.approach = p.get("approach", 0.06)
+        self.allocator = Allocator(AllocatorConfig(alpha=p.get("alpha", 0.5),
+                                                   w_interference=p.get("w_interference", 1.0),
+                                                   robot_speed=self.speed,
+                                                   robot_pick_time=1.875 * self.approach / (self.speed / 2) + 0.9,
+                                                   robot_place_time=0.9,
+                                                   robot_pan_axis=tuple(self.pan_axis)))
         self.drop_z = p.get("drop_z", 0.09)
         self.slot = p.get("bin_slot", 0.025)
         self.max_failures = p.get("max_failures", 3)
@@ -129,6 +132,7 @@ class TaskManager(Node):
         self.human_next = None
         self.at_home = True
         self.home_goal = None
+        self.layout_seed = None
         self.idle_since = None
         self.idle_home_delay = p.get("idle_home_delay", 1.0)
         self.trials = TrialLog(self.log, self.allocator.cfg.alpha)
@@ -508,7 +512,7 @@ class TaskManager(Node):
             if tr.status not in ("pending", "robot_active"):
                 self._say(f"tag {cmd.tag_id} is {tr.status.replace('_', ' ')}, nothing to assign")
                 return
-            tr.lock = owner if owner in (ROBOT, HUMAN) else None
+            tr.lock = None if k == "select_object" else owner if owner in (ROBOT, HUMAN) else None
             if k == "select_object":
                 for other in self.tracks.values():
                     other.robot_first = False
@@ -539,9 +543,12 @@ class TaskManager(Node):
         elif k == "replan":
             self.dirty = "operator replan"
         elif k == "reset_scene":
-            self._start_reset()
+            new_layout = cmd.mode == "new_layout"
+            if new_layout:
+                self.layout_seed = int(np.random.default_rng().integers(1, 10000))
+            self._start_reset(new_layout)
 
-    def _start_reset(self):
+    def _start_reset(self, new_layout=False):
         """Next trial: stop, drive the arm home smoothly (gripper opens there), then let the sim put the cubes back,
         then wait paused for Go. The arm is never teleported, and every trial starts from the same state."""
         if self.mode == "resetting":
@@ -551,14 +558,15 @@ class TaskManager(Node):
             self._goal("stop")
             self.job = None
         self.mode = "resetting"
-        self.reset_goal = self._goal("home", gripper=GRIPPER_OPEN, speed=0.10)
-        self._say("resetting: arm going home")
+        self.reset_goal = self._goal("home", gripper=GRIPPER_OPEN, speed=0.15)
+        self._say("resetting: arm going home" + (", then a new layout" if new_layout else ""))
 
     def _reset_arm_done(self, status, reason):
         if status != "succeeded":
             self.log.warning(f"arm did not reach home ({status} {reason}), resetting anyway")
         self.reset_goal = None
-        self.publish(Topic.OPERATOR_COMMAND, OperatorCommand(kind="reset_world"))
+        self.publish(Topic.OPERATOR_COMMAND, OperatorCommand(kind="reset_world", value=self.layout_seed))
+        self.trials.layout = self.layout_seed
         self.reset_world_at = time.time()
 
     def _finish_reset(self):
@@ -571,7 +579,8 @@ class TaskManager(Node):
         self.mode = "paused"
         self.trials.next_trial()
         self.trial_pending = True
-        self._say(f"trial {self.trials.trial} ready, press Go")
+        layout = f"layout {self.layout_seed}" if self.layout_seed is not None else "default layout"
+        self._say(f"trial {self.trials.trial} ready ({layout}), press Go")
         self.dirty = "scene reset"
 
     def _set_mode(self, mode):
@@ -737,5 +746,8 @@ class TaskManager(Node):
         self.publish(Topic.TASK_STATE, TaskState(
             mode=self.mode, objects=objs, active_tag_id=self.job.tag if self.job else None,
             human_next_tag_id=human_next[0] if human_next else None,
-            robot_step=self.job.step if self.job else "", plan=plan, message=self.message,
-            human_route=[[round(float(p[0]), 3), round(float(p[1]), 3)] for p in route], trial=self.trials.trial))
+            robot_step=self.job.step if self.job else
+            "homing" if (self.home_goal is not None or self.reset_goal is not None) else "",
+            plan=plan, message=self.message,
+            human_route=[[round(float(p[0]), 3), round(float(p[1]), 3)] for p in route], trial=self.trials.trial,
+            trial_stats=self.trials.snapshot()))

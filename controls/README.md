@@ -46,7 +46,8 @@ python -m controls.demo --home       # go home
    about 2 cm; the window shrinks to 0 at the start and the target, so both stay exact). Vertical moves shorter than
    2 cm are folded into the travel instead of becoming a tiny separate hop. The path parameter is spaced by the
    time each step needs at the speed limits (tool `max_speed`, 2.5x that on joint space parts, joint speed
-   1.5 rad/s at 0.1 m/s), and one minimum jerk profile `s = 10t^3 - 15t^4 + 6t^5` runs over the whole path with
+   1.5 rad/s at 0.1 m/s, never above `joint_speed_max` 3 rad/s, the STS3215 does about 4.7 rad/s unloaded), and one
+minimum jerk profile `s = 10t^3 - 15t^4 + 6t^5` runs over the whole path with
    `T = max(1.875 * path time, acceleration limit, 0.25 s)`. Acceleration limits: tool 0.5 m/s^2, joints
    4 rad/s^2, both scaled with `max_speed / 0.1`, using peak min-jerk acceleration `5.774 L / T^2`.
 5. **Speed scale.** Progress advances by `dt * speed_scale / T`. The supervisor's `speed_scale` slows the arm along

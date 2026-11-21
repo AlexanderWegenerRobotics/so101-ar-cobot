@@ -13,7 +13,9 @@ BASE_SITE = "baseframe"
 
 class SimWorld:
     def __init__(self, scene_cfg=None, robot_cfg=None, realtime=True, viewer=False):
-        self.spec, self.model, self.manifest = build(scene_cfg, robot_cfg)
+        from sim.scene_builder import load_config
+        self.scene_cfg = scene_cfg or load_config()
+        self.spec, self.model, self.manifest = build(self.scene_cfg, robot_cfg)
         write_manifest(self.manifest)
         self.data = home_data(self.model)
         self.lock = threading.RLock()
@@ -76,10 +78,21 @@ class SimWorld:
             elif delay < -0.1:
                 next_t = time.perf_counter()
 
-    def reset(self):
+    def reset(self, layout_seed=None):
+        """Back to the start keyframe. With layout_seed, the cubes get a new random layout (same seed, same layout)."""
+        layout = None
+        if layout_seed is not None:
+            from sim.scene_builder import sample_layout
+            layout = sample_layout(self.scene_cfg, self.manifest, int(layout_seed))
         with self.lock:
             self._grasps.clear()
             mujoco.mj_resetDataKeyframe(self.model, self.data, self.model.key("home").id)
+            if layout is not None:
+                for cube in self.manifest["cubes"]:
+                    x, y, yaw = layout[cube["name"]]
+                    adr = self.model.jnt_qposadr[self.model.joint(f"{cube['name']}_joint").id]
+                    self.data.qpos[adr:adr + 3] = [x, y, cube["size"] / 2]
+                    self.data.qpos[adr + 3:adr + 7] = [np.cos(yaw / 2), 0.0, 0.0, np.sin(yaw / 2)]
             mujoco.mj_forward(self.model, self.data)
 
     def render(self, camera=None, width=None, height=None):
