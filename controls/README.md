@@ -20,6 +20,7 @@ python -m controls.demo --home       # go home
 | `trajectory.py` | Minimum jerk timing over a sampled joint path, time-warped by the speed scale. |
 | `node.py` | `ArmController` node (60 Hz). |
 | `demo.py` | Pick-and-place over the bus, a stand-in for the task node. |
+| `measure_stop.py` | Stop latency and stopping distance at several tool speeds (`python launch.py measure`, then `python -m controls.measure_stop`). The numbers for `latency` and `stop_time` in `config/supervisor.yaml`. |
 
 ## How a pose goal runs
 

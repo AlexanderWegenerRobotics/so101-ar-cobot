@@ -28,3 +28,6 @@ class GroundTruthTracker:
 
     def camera_pose(self):
         return self.world.camera_pose_base()
+
+    def close(self):
+        pass
