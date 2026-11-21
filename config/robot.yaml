@@ -31,3 +31,14 @@ controller:
   watchdog_timeout: 0.2    # s, safety messages and stream commands
   goal_tolerance: 1.0      # deg, how close counts as reached
   goal_timeout: 20.0       # s of active motion before a goal fails
+
+grasp:
+  speed: 0.10                # m/s, tool speed for every step
+  hover_height: 0.05         # m, tool height while moving over cubes
+  release_height: 0.08       # m, tool height over the bins and when passing the base
+  via_x: 0.22                # m, waypoint in front of the base between cubes and bins
+  transit_pitch_deg: -80.0   # tool tilt while moving, -90 points straight down
+  gripper_open: 80.0         # 0 closed to 100 open
+  gripper_closed: 0.0
+  dwell: 0.6                 # s to wait after a gripper command
+  ready_deg: [-0.3, -22.0, 25.2, 86.8, 0.0]   # pan lift elbow flex roll, start pose

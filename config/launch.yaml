@@ -44,3 +44,11 @@ profiles:
     sim: {viewer: false}
     nodes:
       - node: controls.node:ArmControllerNode
+
+  pickplace:
+    sim: {viewer: true}
+    nodes:
+      - node: perception.node:ObjectPublisher
+        params: {source: apriltag, rate_hz: 10}
+      - node: controls.stubs:SafetyStub
+      - node: controls.node:ArmControllerNode

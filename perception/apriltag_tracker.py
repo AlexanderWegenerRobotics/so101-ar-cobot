@@ -62,7 +62,11 @@ class AprilTagTracker:
         self.camera.disconnect()
 
     def _update(self):
-        gray = cv2.cvtColor(self.camera.read_latest(), cv2.COLOR_RGB2GRAY)
+        try:
+            frame = self.camera.read_latest()
+        except (TimeoutError, RuntimeError):
+            return
+        gray = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
         stamp = time.time()
         for tag_id, corners in detect_tags(self.detector, gray).items():
             spec = self.registry.get(tag_id)

@@ -30,9 +30,13 @@ class GoalRunner:
             if topic == Topic.ARM_STATUS:
                 self.statuses[msg.goal_id] = msg
 
+    def has_objects_and_arm_state(self):
+        objects = self.latest.get(Topic.OBJECTS)
+        return bool(objects and objects.objects) and Topic.ARM_STATE in self.latest
+
     def wait_until_ready(self):
         deadline = time.time() + TIMEOUT
-        while not {Topic.OBJECTS, Topic.ARM_STATE} <= self.latest.keys():
+        while not self.has_objects_and_arm_state():
             if time.time() > deadline:
                 raise TimeoutError("no objects or arm state on the bus, is cobot-launch pickplace running?")
             self.pump()
