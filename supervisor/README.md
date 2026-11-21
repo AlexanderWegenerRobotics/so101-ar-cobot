@@ -47,8 +47,8 @@ S = v_h * (T_r + T_s) + v_r * T_r + v_r * T_s / 2 + C        T_r = latency + 1 /
 S = 0.233 m; the node logs it at startup. `latency`, `arm_speed` and `stop_time` are estimates until we measure them
 on the real arm. With the ISO 13855 hand speed of 2.0 m/s S is about 0.5 m.
 
-The task planner predicts interference with its own copy of the ramp (`slow_distance` 0.25, `stop_distance` 0.10 in
-`task/allocator.py`), which no longer matches S.
+The task planner (`task/allocator.py`) reads S and `slow_buffer` from this config for its interference prediction,
+so it follows any change here.
 
 ## UPPAAL
 

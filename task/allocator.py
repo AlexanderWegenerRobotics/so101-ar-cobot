@@ -19,7 +19,9 @@ The human is several times faster than the SO-101 (about 3 s against 15 s per cu
 
 Interference: for a robot job r and a human job h, conflict[r, h] in [0, 1] is the expected slowdown the safety
 supervisor would impose while both run: its speed ramp (1 at slow_distance, 0 at stop_distance) applied to the
-distance between the human hand path (around the base, cube -> bin) and the robot (tool path and arm). Running the
+distance between the human hand path (around the base, cube -> bin) and the robot (tool path and arm). Both
+distances come from config/supervisor.yaml (S and S + slow_buffer, plus link and finger radius because the planner
+measures between centers and the supervisor between surfaces), so the prediction follows the supervisor. Running the
 two jobs at the same time costs w_interference * conflict * overlap seconds.
 
 Solver: exact search over the joint schedule with memoization (dynamic programming over states). Whichever agent
@@ -32,7 +34,7 @@ with the remaining time rounded to `time_step` for the memo key, so equal situat
 orders are solved once. 8 open jobs: about 18k states, well under 100 ms per weight in Python.
 """
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from functools import lru_cache
 
 import numpy as np
@@ -72,8 +74,8 @@ class AllocatorConfig:
     human_speed: float = 0.45
     human_pick_time: float = 0.8
     human_place_time: float = 0.5
-    slow_distance: float = 0.25
-    stop_distance: float = 0.10
+    slow_distance: float | None = None
+    stop_distance: float | None = None
     keep_out_radius: float = 0.14
     wait_min_conflict: float = 0.15
     time_step: float = 0.25
@@ -141,9 +143,22 @@ def _cyl(p, axis):
     return math.hypot(*d), math.atan2(d[1], d[0]), p[2] if len(p) > 2 else 0.0
 
 
+def supervisor_ramp():
+    from supervisor.node import load_config, safe_distance
+
+    c = load_config()
+    stop = safe_distance(c) + c["link_radius"] + c["finger_radius"]
+    return stop + c["slow_buffer"], stop
+
+
 class Allocator:
     def __init__(self, cfg=None):
-        self.cfg = cfg or AllocatorConfig()
+        cfg = cfg or AllocatorConfig()
+        if cfg.slow_distance is None or cfg.stop_distance is None:
+            slow, stop = supervisor_ramp()
+            cfg = replace(cfg, slow_distance=cfg.slow_distance if cfg.slow_distance is not None else slow,
+                          stop_distance=cfg.stop_distance if cfg.stop_distance is not None else stop)
+        self.cfg = cfg
 
     # ----- time and conflict models
 

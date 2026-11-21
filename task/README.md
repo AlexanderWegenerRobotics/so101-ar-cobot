@@ -32,7 +32,8 @@ would pass within `keep_out_radius` (14 cm) of the pan axis goes around that cir
 the human's time, the sim human walks it, and the headset draws the suggested path on the table.
 
 **Interference.** For a robot job and a human job, `conflict` in [0, 1] is the expected slowdown the safety
-supervisor would impose while both run: its speed ramp (1 at 25 cm, 0 at 10 cm) applied to the distance between
+supervisor would impose while both run: its speed ramp (1 at S + slow_buffer, 0 at S, both from
+`config/supervisor.yaml` plus link and finger radius, so about 42 cm and 27 cm now) applied to the distance between
 the human's detoured hand path and the robot's sweep (tool path cube -> bin plus points along the arm back to the
 base), averaged along the hand path. Running both at the same time costs `w_interference (1) x conflict x overlap`
 seconds: each predicted second of slowed arm counts as one second of time, so `FAST` (alpha 0) is the plan that
