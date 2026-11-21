@@ -23,10 +23,17 @@
 The controller applies the scale by time-warping the motion along the same path, so a slowed arm never leaves its
 planned path, and stops when no `safety` message arrives for 0.2 s. Zone changes are logged with the distance and
 the time spent in the previous zone. `reason` says how far the hand is and, during a dropout, for how long it has
-not been seen. `min_distance` is the worst-case distance above, not the raw one.
+not been seen. `min_distance` is the worst-case distance above and drives the zones. `raw_distance` is the same
+distance without the `hand_speed * age` term, i.e. to where each hand was last actually seen; the trial log
+(`task/trials.py`) records that one as `min_hand_arm_m`, so tracking dropouts don't show up as near misses. Both
+are filled with `enabled: false` too.
 
 `enabled: false` only monitors and logs, never slows the arm (baseline trials). `passthrough.py` is the old
 placeholder (no checks).
+
+Known limitation: a hand that has never been tracked since startup is ignored, so if only the right hand was ever
+seen, the left one counts as clear. There is no last position to measure from, so it can't be bounded. The UPPAAL
+model covers one hand.
 
 ## Separation distance S
 

@@ -13,6 +13,7 @@ Checks every tick:
   update    d == clearance(arm now, hand at its last real detection) - hand_speed * time since that detection,
             i.e. only tracked messages reset the age (flicker cannot keep old data alive)
   bound     d <= true clearance (the model's invariant: the supervisor never thinks the hand is farther than it is)
+  raw       raw_distance == clearance(arm now, hand at its last real detection), without the age term
   goals     every arm/goal is forwarded to arm/command unchanged (the controller holds on stop)
 
     python supervisor/uppaal/check_conformance.py                 200 runs of 30 s
@@ -164,6 +165,9 @@ def run(node, clock, rng, seconds, mutate, seen):
         if d is None or abs(d - d_model) > TOL_D:
             errors.append(f"{where} update: code d = {d}, model d = {d_model:.4f} ({mode})")
             continue
+        raw_model = clearance(node, arm_joints, last_seen[0])
+        if safety.raw_distance is None or abs(safety.raw_distance - raw_model) > TOL_D:
+            errors.append(f"{where} raw: code raw = {safety.raw_distance}, model raw = {raw_model:.4f} ({mode})")
         if d > d_true + TOL_D:
             errors.append(f"{where} bound: d = {d:.4f} > true clearance {d_true:.4f} ({mode})")
 

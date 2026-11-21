@@ -18,6 +18,9 @@ The smallest d over all hands picks the zone, with the separation distance S fro
     no hand seen yet            clear
     arm/state older than arm_max_age, or none yet: stop
 
+min_distance in safety is that worst-case d, used for the zones. raw_distance leaves out the hand_speed * age
+term, i.e. it is the distance to where each hand was last seen; that is what the trial log records.
+
 Goals from arm/goal go to arm/command unchanged (the controller applies the scale and the stop). Zone changes are
 logged with the distance, which is the data for the safety study.
 """
@@ -96,13 +99,14 @@ class SafetySupervisor(Node):
 
     def worst_case(self, now):
         arm = self.arm_points(self.arm_state.joints)
-        best = None
+        best, raw = None, None
         for joints, seen in self.hands.values():
-            gap = np.linalg.norm(arm[:, None, :] - joints[None, :, :], axis=2).min() - self.radii
-            d = float(gap) - self.hand_speed * (now - seen)
+            gap = float(np.linalg.norm(arm[:, None, :] - joints[None, :, :], axis=2).min()) - self.radii
+            d = gap - self.hand_speed * (now - seen)
             if best is None or d < best[0]:
                 best = (d, now - seen)
-        return best
+            raw = gap if raw is None else min(raw, gap)
+        return best[0], best[1], raw
 
     def step(self):
         now = time.time()
@@ -114,13 +118,13 @@ class SafetySupervisor(Node):
             elif topic == Topic.HAND and isinstance(msg, HandState) and msg.tracked and msg.joints:
                 self.hands[msg.side] = (np.asarray(msg.joints, float), now)
 
-        dist, age = None, 0.0
+        dist, age, raw = None, 0.0, None
         if self.arm_state is None or now - self.arm_time > self.arm_max_age:
             scale, zone, reason = 0.0, "stop", "no arm state"
         elif not self.hands:
             scale, zone, reason = 1.0, "clear", ""
         else:
-            dist, age = self.worst_case(now)
+            dist, age, raw = self.worst_case(now)
             reason = f"hand {dist:.2f} m from the arm" + (f", not seen for {age:.1f} s" if age > 2.0 / self.rate_hz else "")
             if dist < self.S or (self.stopped and dist < self.S + self.hysteresis):
                 scale, zone = 0.0, "stop"
@@ -140,4 +144,5 @@ class SafetySupervisor(Node):
             stop = zone == "stop"
         self.publish(Topic.SAFETY, SafetyState(
             speed_scale=round(float(np.clip(scale, 0.0, 1.0)), 3), stop=stop, zone=zone, reason=reason,
-            min_distance=None if dist is None else round(dist, 4)))
+            min_distance=None if dist is None else round(dist, 4),
+            raw_distance=None if raw is None else round(raw, 4)))
