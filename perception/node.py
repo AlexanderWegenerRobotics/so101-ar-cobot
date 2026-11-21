@@ -14,3 +14,6 @@ class ObjectPublisher(Node):
     def step(self):
         objects = self.tracker.get_objects()
         self.publish(Topic.OBJECTS, ObjectArray(objects=list(objects.values()), source=self.tracker.source))
+
+    def teardown(self):
+        self.tracker.close()

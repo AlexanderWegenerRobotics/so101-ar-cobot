@@ -4,3 +4,4 @@
 #   apriltag:     AprilTag detection on the camera image (sim render or real RealSense).
 # The VR world itself is always drawn from sim ground truth (sim/scene), independent of this.
 source: ground_truth
+manifest: sim/generated/scene_manifest.json
