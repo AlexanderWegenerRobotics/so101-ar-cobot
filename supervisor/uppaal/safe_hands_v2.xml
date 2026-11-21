@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE nta PUBLIC '-//Uppaal Team//DTD Flat System 1.6//EN' 'http://www.it.uu.se/research/group/darts/uppaal/flat-1_6.dtd'>
+<nta>
+	<declaration>// Safe Hands supervisor model v2 (matches supervisor/node.py and config/supervisor.yaml).
+// Discrete time, 1D: d = true distance between the hand and the closest point of the arm. Contact when d == 0.
+// One step is a third of a supervisor tick, one distance unit is how far the slower of hand and arm moves in one step.
+//
+// The constants below are written by supervisor/uppaal/gen_model.py from config/supervisor.yaml. Don't edit them
+// by hand: change the yaml, run `python supervisor/uppaal/gen_model.py --verify`. All rounding is conservative
+// (times and detection error rounded up, thresholds rounded down).
+//
+// Supervisor rule (same as node.py): w = clearance(arm now, hand last seen) - hand_speed * age,
+// where age counts from the last REAL detection only (flicker cannot reset it).
+//   w &lt; S, or still stopped and w &lt; S + HYST -&gt; stop;  w &lt; S + BUF -&gt; slow;  else clear.
+// d and w are clearances: node.py subtracts the link and finger radii before comparing, the model works on the result.
+// In 1D, b below is exactly w: it is set to the measured gap on a fresh detection and then shrinks every step
+// by the hand's max step (VH) plus however far the arm moved toward the hand (the arm state is never stale).
+//
+// Modelling choices (all on the safe side):
+//  * The arm always moves toward the hand when it moves (worst direction).
+//  * Slow mode is treated as full speed (S in the code assumes full arm speed, so safety must not rely on slowing).
+//  * Latency is modelled as the decision reaching the arm LAT steps late, instead of the detection arriving LAT late.
+//    Because the arm only ever moves toward the hand, this gives the supervisor no extra information (conservative).
+//  * Hand detections may drop out on any step in any pattern, including flicker.
+//  * Every detection may read up to C_ERR too far.
+
+const int PERIOD = 3;        // supervisor tick, steps
+const int LAT    = 5;        // latency, steps. Needs PERIOD &lt;= LAT &lt; 2*PERIOD.
+const int T_STOP = 9;        // braking time, steps
+const int BRAKE_MOVE = 5;    // steps of full-speed motion while braking
+
+const int VH  = 1;           // max hand step toward/away from the arm (units/step)
+const int VA  = 1;           // arm step toward the hand at full speed (units/step)
+const int C_ERR = 9;         // detection error, units
+const int S   = 42;          // stop distance, units
+const int BUF = 27;          // slow buffer, units
+const int HYST = 5;          // a stop is released only above S + HYST, units
+const int DMAX = S + BUF + 30;   // hand starts well outside the slow zone
+const int AGE_CAP = 20;      // dropout counter cap (steps), only used by the queries
+
+const bool CAN_LOSE_TRACKING = true;
+
+const int CLEAR = 0;
+const int SLOW  = 1;
+const int STOP  = 2;
+
+const int MOV = 0;   // moving (clear or slow; both at full speed in the model)
+const int BRK = 1;   // braking
+const int STP = 2;   // fully stopped
+
+int[0,DMAX] d = DMAX;            // true distance
+int[0,DMAX+C_ERR] b = DMAX;      // supervisor's worst-case distance w
+bool fresh = true;               // hand detected in this frame
+int[0,AGE_CAP] age = 0;          // steps since the last real detection (capped)
+
+int[0,2] mode = MOV;
+int[0,T_STOP] bs = 0;            // braking steps elapsed
+int[0,BRAKE_MOVE] brem = 0;      // braking steps with motion left
+
+int[0,PERIOD-1] p = 0;           // steps since the last supervisor tick
+int[0,2] pend0 = CLEAR;          // latest decision (in flight)
+int[0,2] pend1 = CLEAR;          // previous decision (in flight)
+int[0,2] zone = CLEAR;           // latest decision, for the queries
+bool stopped_once = false;
+bool latched = false;            // last decision was stop (hysteresis)
+
+clock t;
+
+void applyCmd(int c) {
+    if (c == STOP) {
+        if (mode == MOV) { mode = BRK; bs = 0; brem = BRAKE_MOVE; }
+    } else {
+        if (mode != MOV) { mode = MOV; }   // clear or slow: arm may (re)start at full speed
+    }
+}
+
+void step(int h, int f) {
+    int dd = d - h;     // hand moves h toward the arm (negative = away)
+    int am = 0;         // arm motion toward the hand this step
+    int nb = b;
+
+    if (mode == MOV) {
+        am = VA;
+    } else if (mode == BRK) {
+        if (brem &gt; 0) { am = VA; brem--; }
+        bs++;
+        if (bs &gt;= T_STOP) { mode = STP; stopped_once = true; }
+    }
+    dd = dd - am;
+    if (dd &lt; 0) dd = 0;
+    if (dd &gt; DMAX) dd = DMAX;
+    d = dd;
+
+    nb = nb - VH - am;          // bubble grows by VH, arm motion is known
+    if (nb &lt; 0) nb = 0;
+    b = nb;
+
+    fresh = CAN_LOSE_TRACKING ? (f == 1) : true;
+    if (fresh) age = 0; else if (age &lt; AGE_CAP) age++;
+
+    p = (p + 1) % PERIOD;
+    if (p == LAT - PERIOD) applyCmd(pend1);
+    if (p == 0) {
+        int cmd;
+        if (fresh) { b = d + C_ERR; }       // real detection: reset w to the measured gap
+        if (b &lt; S || (latched &amp;&amp; b &lt; S + HYST)) cmd = STOP;
+        else if (b &lt; S + BUF) cmd = SLOW;
+        else cmd = CLEAR;
+        zone = cmd;
+        latched = cmd == STOP;
+        pend1 = pend0;
+        pend0 = cmd;
+    }
+}</declaration>
+	<template>
+		<name>World</name>
+		<location id="w0" x="0" y="0">
+			<name x="-20" y="-34">Run</name>
+			<label kind="invariant" x="-20" y="17">t &lt;= 1</label>
+		</location>
+		<init ref="w0"/>
+		<transition id="wt0">
+			<source ref="w0"/>
+			<target ref="w0"/>
+			<label kind="select" x="40" y="-110">h : int[-VH,VH], f : int[0,1]</label>
+			<label kind="guard" x="40" y="-90">t == 1</label>
+			<label kind="assignment" x="40" y="-70">step(h, f), t = 0</label>
+			<nail x="40" y="-50"/>
+			<nail x="120" y="-50"/>
+			<nail x="120" y="0"/>
+		</transition>
+	</template>
+	<system>system World;</system>
+	<queries>
+		<query>
+			<formula>A[] not deadlock</formula>
+			<comment>Nothing ever gets stuck.</comment>
+		</query>
+		<query>
+			<formula>A[] (d == 0 imply mode == STP)</formula>
+			<comment>SAFETY: whenever the hand touches the arm, the arm is fully stopped. Every hand motion, every dropout/flicker pattern.</comment>
+		</query>
+		<query>
+			<formula>E&lt;&gt; d == 0</formula>
+			<comment>Sanity: the hand can actually reach the arm.</comment>
+		</query>
+		<query>
+			<formula>E&lt;&gt; (stopped_once and mode == MOV)</formula>
+			<comment>Liveness sanity: after a full stop the arm can get back to full speed.</comment>
+		</query>
+		<query>
+			<formula>E&lt;&gt; (age &gt;= 15 and mode == MOV and zone == CLEAR)</formula>
+			<comment>No needless stops: 165 ms (5 ticks) into a dropout, with the hand far, the arm can still be moving at full speed with the zone clear.</comment>
+		</query>
+	</queries>
+</nta>

@@ -1,0 +1,22 @@
+# Supervisor settings, i.e. how close a hand may get to the arm before it slows or stops.
+# The UPPAAL model (supervisor/uppaal/safe_hands_v2.xml) is generated from these numbers:
+# after changing anything here run `python supervisor/uppaal/gen_model.py --verify`.
+rate_hz: 30
+arm_max_age: 0.2      # s, arm/state older than this means stop
+enabled: true         # false: only monitor and log, never slow the arm (baseline trials)
+
+# Separation distance S = v_h*(T_r + T_s) + v_r*T_r + v_r*T_s/2 + C, with T_r = latency + 1/rate_hz.
+# Stop below S, slow (speed_scale 0 to 1) between S and S + slow_buffer.
+# latency, arm_speed and stop_time are estimates until we measure them on the real arm.
+hand_speed: 0.5       # m/s, assumed max hand speed (ISO 13855 uses 2.0, which gives S around 0.5 m)
+latency: 0.05         # s, hand tracking + bus
+arm_speed: 0.5        # m/s, at speed_scale 1
+stop_time: 0.10       # s, full speed to standstill
+margin: 0.075         # m, C: tracking error and finger size (5 cm) plus 2.5 cm so S passes the UPPAAL check
+tracking_error: 0.05  # m, how far a hand detection can be off; only the UPPAAL model uses it
+slow_buffer: 0.15     # m
+
+# Geometry: distances are between link segments and hand joints, minus these radii.
+link_radius: 0.03     # m
+finger_radius: 0.01   # m
+hysteresis: 0.03      # m, a stop is released only above S + hysteresis

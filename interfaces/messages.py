@@ -94,6 +94,7 @@ class SafetyState:
     zone: str = "clear"
     reason: str = ""
     min_distance: float | None = None
+    raw_distance: float | None = None
     stamp: float = field(default_factory=now)
 
 

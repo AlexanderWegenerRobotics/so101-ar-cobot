@@ -69,9 +69,9 @@ class TrialLog:
                 self.stats["stop_s"] += dt
             if msg.zone == "stop" and zone != "stop":
                 self.stats["stops"] += 1
-        if msg.min_distance is not None and robot_busy:
+        if msg.raw_distance is not None and robot_busy:
             m = self.stats["min_hand_arm_m"]
-            self.stats["min_hand_arm_m"] = msg.min_distance if m is None else min(m, msg.min_distance)
+            self.stats["min_hand_arm_m"] = msg.raw_distance if m is None else min(m, msg.raw_distance)
         self.last_safety = (msg, now)
 
     def finish(self, completed=True):

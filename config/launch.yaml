@@ -4,7 +4,6 @@ profiles:
     nodes:
       - node: perception.node:ObjectPublisher
       - node: supervisor.node:SafetySupervisor
-        params: {slow_distance: 0.25, stop_distance: 0.10}
       - node: controls.node:ArmController
         params: {gripper_speed: 300, gripper_settle: 0.25}
       - node: hardware.workspace:WorkspacePublisher
@@ -18,7 +17,6 @@ profiles:
     nodes:
       - node: perception.node:ObjectPublisher
       - node: supervisor.node:SafetySupervisor
-        params: {slow_distance: 0.25, stop_distance: 0.10}
       - node: controls.node:ArmController
         params: {gripper_speed: 300, gripper_settle: 0.25}
       - node: hardware.workspace:WorkspacePublisher
@@ -32,7 +30,6 @@ profiles:
     nodes:
       - node: perception.node:ObjectPublisher
       - node: supervisor.node:SafetySupervisor
-        params: {slow_distance: 0.25, stop_distance: 0.10}
       - node: controls.node:ArmController
         params: {gripper_speed: 300, gripper_settle: 0.25}
       - node: hardware.workspace:WorkspacePublisher
@@ -47,7 +44,6 @@ profiles:
     nodes:
       - node: perception.node:ObjectPublisher
       - node: supervisor.node:SafetySupervisor
-        params: {slow_distance: 0.25, stop_distance: 0.10}
       - node: controls.node:ArmController
         params: {gripper_speed: 300, gripper_settle: 0.25}
       - node: hardware.workspace:WorkspacePublisher
